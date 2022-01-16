@@ -10,16 +10,28 @@ use crate::{error::Result, github::GitHub};
 
 pub struct App {
     github: GitHub,
-    should_quit: bool,
-    reload_notifications: bool,
+    state: AppState,
+}
+
+pub struct AppState {
+    pub should_quit: bool,
+    pub reload_notifications: bool,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            should_quit: false,
+            reload_notifications: false,
+        }
+    }
 }
 
 impl App {
     pub fn new() -> Result<Self> {
         Ok(Self {
             github: GitHub::token_from_env()?,
-            should_quit: false,
-            reload_notifications: false,
+            state: AppState::default(),
         })
     }
 
@@ -65,7 +77,7 @@ impl App {
                 last_tick = Instant::now();
             }
 
-            if self.should_quit {
+            if self.state.should_quit {
                 return Ok(());
             }
         }
@@ -73,8 +85,8 @@ impl App {
 
     fn on_key(&mut self, key: char) {
         match key {
-            'q' => self.should_quit = true,
-            'r' => self.reload_notifications = true,
+            'q' => self.state.should_quit = true,
+            'r' => self.state.reload_notifications = true,
             _ => (),
         }
     }
@@ -92,9 +104,9 @@ mod ui {
     use crate::app::App;
 
     pub fn draw_notifications<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
-        let notifications = app.github.notifications(app.reload_notifications);
-        if app.reload_notifications {
-            app.reload_notifications = false
+        let notifications = app.github.notifications(app.state.reload_notifications);
+        if app.state.reload_notifications {
+            app.state.reload_notifications = false
         }
 
         if let Err(_) = notifications {
