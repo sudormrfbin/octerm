@@ -11,6 +11,7 @@ use crate::{error::Result, github::GitHub};
 pub struct App {
     github: GitHub,
     should_quit: bool,
+    reload_notifications: bool,
 }
 
 impl App {
@@ -18,6 +19,7 @@ impl App {
         Ok(Self {
             github: GitHub::token_from_env()?,
             should_quit: false,
+            reload_notifications: false,
         })
     }
 
@@ -72,6 +74,7 @@ impl App {
     fn on_key(&mut self, key: char) {
         match key {
             'q' => self.should_quit = true,
+            'r' => self.reload_notifications = true,
             _ => (),
         }
     }
@@ -89,7 +92,11 @@ mod ui {
     use crate::app::App;
 
     pub fn draw_notifications<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
-        let notifications = app.github.notifications();
+        let notifications = app.github.notifications(app.reload_notifications);
+        if app.reload_notifications {
+            app.reload_notifications = false
+        }
+
         if let Err(_) = notifications {
             let block = Block::default().title("Error").borders(Borders::ALL);
             f.render_widget(block, area);

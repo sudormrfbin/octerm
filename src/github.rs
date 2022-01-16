@@ -23,8 +23,8 @@ impl GitHub {
         Self::new(&token)
     }
 
-    pub fn notifications(&mut self) -> Result<&Page<Notification>> {
-        if self.notif_cache.is_none() {
+    pub fn notifications(&mut self, reload: bool) -> Result<&Page<Notification>> {
+        if self.notif_cache.is_none() || reload {
             let notifs = block_on(self.octocrab.activity().notifications().list().send())
                 .map_err(|e: octocrab::Error| Error::from(e))?;
             self.notif_cache = Some(notifs);
