@@ -93,13 +93,7 @@ impl App {
 }
 
 mod ui {
-    use tui::{
-        backend::Backend,
-        layout::Rect,
-        style::{Color, Modifier, Style},
-        widgets::{Block, Borders, List, ListItem},
-        Frame,
-    };
+    use tui::{Frame, backend::Backend, layout::{Constraint, Rect}, style::{Color, Modifier, Style}, widgets::{Block, Borders, Cell, Row, Table}};
 
     use crate::app::App;
 
@@ -114,27 +108,40 @@ mod ui {
             f.render_widget(block, area);
             return;
         }
+
         let notifications: Vec<_> = notifications
             .unwrap()
             .into_iter()
             .map(|n| {
-                let repo = &n.repository.name;
+                let repo = n.repository.name.as_str();
+                let (type_, type_color) = match n.subject.type_.as_str() {
+                    "Issue" => ("", Color::LightGreen),
+                    "PullRequest" => ("", Color::LightMagenta),
+                    "CheckSuite" => ("", Color::Red),
+                    "Release" => ("", Color::Blue),
+                    "Discussion" => ("", Color::Yellow),
+                    _ => ("", Color::Yellow),
+                };
                 let repo_author = n
                     .repository
                     .owner
                     .as_ref()
                     .map(|o| o.login.clone())
                     .unwrap_or_default();
-                let title = &n.subject.title;
-                ListItem::new(format!("{repo_author}/{repo}: {title}"))
+                let title = n.subject.title.as_str();
+                Row::new(vec![
+                    Cell::from(format!("{repo_author}/{repo}")),
+                    Cell::from(format!("{type_} {title}")).style(Style::default().fg(type_color)),
+                ])
             })
             .collect();
-        let list = List::new(notifications)
-            .block(Block::default().title("Notifications").borders(Borders::ALL))
-            .style(Style::default().fg(Color::White))
-            .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
-            .highlight_symbol(">>");
+        let title = format!("Notifications ({})", notifications.len());
+        let table = Table::new(notifications)
+            .header(Row::new(vec!["Repo", "Notification"]).style(Style::default().add_modifier(Modifier::BOLD)))
+            .block(Block::default().title(title).borders(Borders::ALL))
+            .widths(&[Constraint::Percentage(20), Constraint::Percentage(80)])
+            .style(Style::default().fg(Color::White));
 
-        f.render_widget(list, area);
+        f.render_widget(table, area);
     }
 }
