@@ -103,6 +103,8 @@ impl App {
         match key {
             'q' => s.should_quit = true,
             'r' => s.reload_notifications = true,
+            'g' => s.selected_notification_index = 0,
+            'G' => s.selected_notification_index = s.notifications_len.saturating_sub(1),
             'j' => {
                 s.selected_notification_index = s
                     .selected_notification_index
