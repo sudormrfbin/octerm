@@ -1,6 +1,13 @@
-use std::time::{Duration, Instant};
+use std::{
+    ops::Add,
+    time::{Duration, Instant},
+};
 
-use crossterm::{event::{DisableMouseCapture, EnableMouseCapture, Event, KeyCode}, execute, terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}};
+use crossterm::{
+    event::{DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
 use tui::{
     backend::{Backend, CrosstermBackend},
     Terminal,
@@ -16,6 +23,8 @@ pub struct App {
 pub struct AppState {
     pub should_quit: bool,
     pub reload_notifications: bool,
+    pub selected_notification_index: usize,
+    pub notifications_len: usize,
 }
 
 impl Default for AppState {
@@ -23,6 +32,8 @@ impl Default for AppState {
         Self {
             should_quit: false,
             reload_notifications: false,
+            selected_notification_index: 0,
+            notifications_len: 0,
         }
     }
 }
@@ -45,7 +56,11 @@ impl App {
         self.event_loop(&mut terminal, tick_rate)?;
 
         disable_raw_mode()?;
-        execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
+        execute!(
+            terminal.backend_mut(),
+            LeaveAlternateScreen,
+            DisableMouseCapture
+        )?;
 
         Ok(())
     }
@@ -84,35 +99,61 @@ impl App {
     }
 
     fn on_key(&mut self, key: char) {
+        let s = &mut self.state;
         match key {
-            'q' => self.state.should_quit = true,
-            'r' => self.state.reload_notifications = true,
+            'q' => s.should_quit = true,
+            'r' => s.reload_notifications = true,
+            'j' => {
+                s.selected_notification_index = s
+                    .selected_notification_index
+                    .add(1)
+                    .min(s.notifications_len.saturating_sub(1))
+            }
+            'k' => s.selected_notification_index = s.selected_notification_index.saturating_sub(1),
             _ => (),
         }
     }
 }
 
 mod ui {
-    use tui::{Frame, backend::Backend, layout::{Constraint, Rect}, style::{Color, Modifier, Style}, widgets::{Block, Borders, Cell, Row, Table}};
+    use tui::{
+        backend::Backend,
+        layout::{Constraint, Rect},
+        style::{Color, Modifier, Style},
+        widgets::{Block, Borders, Cell, Paragraph, Row, Table},
+        Frame,
+    };
 
     use crate::app::App;
 
     pub fn draw_notifications<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
         let notifications = app.github.notifications(app.state.reload_notifications);
         if app.state.reload_notifications {
-            app.state.reload_notifications = false
+            app.state.selected_notification_index = 0;
+            app.state.reload_notifications = false;
         }
 
-        if let Err(_) = notifications {
-            let block = Block::default().title("Error").borders(Borders::ALL);
-            f.render_widget(block, area);
-            return;
-        }
+        let notifications = match notifications {
+            Ok(n) => n,
+            Err(err) => {
+                app.state.notifications_len = 0;
+                let paragraph = Paragraph::new(format!("{:?}", err))
+                    .block(Block::default().title("Error").borders(Borders::ALL));
+                f.render_widget(paragraph, area);
+                return;
+            }
+        };
+        app.state.notifications_len = notifications.into_iter().len();
+
+        let selected_notif_idx = app.state.selected_notification_index;
+        let offset = selected_notif_idx // 6 for border, header, padding
+            .saturating_sub(area.height.saturating_sub(6).into());
 
         let notifications: Vec<_> = notifications
-            .unwrap()
             .into_iter()
-            .map(|n| {
+            .skip(offset)
+            .enumerate()
+            .map(|(i, n)| {
                 let repo = n.repository.name.as_str();
                 let (type_, type_color) = match n.subject.type_.as_str() {
                     "Issue" => ("", Color::LightGreen),
@@ -120,7 +161,7 @@ mod ui {
                     "CheckSuite" => ("", Color::Red),
                     "Release" => ("", Color::Blue),
                     "Discussion" => ("", Color::Yellow),
-                    _ => ("", Color::Yellow),
+                    _ => ("", Color::White),
                 };
                 let repo_author = n
                     .repository
@@ -129,16 +170,28 @@ mod ui {
                     .map(|o| o.login.clone())
                     .unwrap_or_default();
                 let title = n.subject.title.as_str();
+
+                let row_style = if i == selected_notif_idx.saturating_sub(offset) {
+                    Style::default().add_modifier(Modifier::REVERSED)
+                } else {
+                    Style::default()
+                };
+
                 Row::new(vec![
                     Cell::from(format!("{repo_author}/{repo}")),
                     Cell::from(format!("{type_} {title}")).style(Style::default().fg(type_color)),
                 ])
+                .style(row_style)
             })
             .collect();
-        let title = format!("Notifications ({})", notifications.len());
+
+        let table_title = format!("Notifications ({})", app.state.notifications_len);
         let table = Table::new(notifications)
-            .header(Row::new(vec!["Repo", "Notification"]).style(Style::default().add_modifier(Modifier::BOLD)))
-            .block(Block::default().title(title).borders(Borders::ALL))
+            .header(
+                Row::new(vec!["Repo", "Notification"])
+                    .style(Style::default().add_modifier(Modifier::BOLD)),
+            )
+            .block(Block::default().title(table_title).borders(Borders::ALL))
             .widths(&[Constraint::Percentage(20), Constraint::Percentage(80)])
             .style(Style::default().fg(Color::White));
 
