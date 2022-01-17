@@ -19,14 +19,14 @@ impl GitHub {
     }
 
     pub fn token_from_env() -> Result<Self> {
-        let token = std::env::var("GITHUB_TOKEN").map_err(|_| Error::AuthError)?;
+        let token = std::env::var("GITHUB_TOKEN").map_err(|_| Error::Authentication)?;
         Self::new(&token)
     }
 
     pub fn notifications(&mut self, reload: bool) -> Result<&Page<Notification>> {
         if self.notif_cache.is_none() || reload {
             let notifs = block_on(self.octocrab.activity().notifications().list().send())
-                .map_err(|e: octocrab::Error| Error::from(e))?;
+                .map_err(Error::from)?;
             self.notif_cache = Some(notifs);
         }
         return Ok(self.notif_cache.as_ref().unwrap());
