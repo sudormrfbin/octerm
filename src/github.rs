@@ -26,6 +26,7 @@ impl GitHub {
         Self::new(&token)
     }
 
+    /// Constructs a "repo_author/repo_name" string normally seen on GitHub.
     pub fn repo_name(repo: &Repository) -> String {
         let name = repo.name.as_str();
         let author = repo
@@ -36,6 +37,7 @@ impl GitHub {
         format!("{author}/{name}")
     }
 
+    /// Returns the url the notification points to.
     pub fn open_notification(&mut self, notif: &Notification) -> Result<String> {
         let default_url = notif.subject.url.as_ref().ok_or(Error::UrlNotFound);
         match notif.subject.type_.as_str() {
@@ -69,6 +71,7 @@ impl GitHub {
         }
     }
 
+    /// Get all unread notifications.
     pub fn notifications(&mut self, reload: bool) -> Result<&Page<Notification>> {
         if self.notif_cache.is_none() || reload {
             let notifs = block_on(self.octocrab.activity().notifications().list().send())
