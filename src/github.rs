@@ -74,7 +74,7 @@ impl GitHub {
     /// Get all unread notifications.
     pub fn notifications(&mut self, reload: bool) -> Result<&Page<Notification>> {
         if self.notif_cache.is_none() || reload {
-            let notifs = block_on(self.octocrab.activity().notifications().list().send())
+            let notifs = block_on(self.octocrab.activity().notifications().list().all(true).send())
                 .map_err(Error::from)?;
             self.notif_cache = Some(notifs);
         }

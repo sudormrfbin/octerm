@@ -174,8 +174,8 @@ mod ui {
             .into_iter()
             .skip(offset)
             .enumerate()
-            .map(|(i, n)| {
-                let (type_, type_color) = match n.subject.type_.as_str() {
+            .map(|(i, notif)| {
+                let (type_, type_color) = match notif.subject.type_.as_str() {
                     "Issue" => ("", Color::LightGreen),
                     "PullRequest" => ("", Color::LightMagenta),
                     "CheckSuite" => ("", Color::Red),
@@ -183,17 +183,24 @@ mod ui {
                     "Discussion" => ("", Color::Yellow),
                     _ => ("", Color::White),
                 };
-                let title = n.subject.title.as_str();
 
-                let row_style = if i == selected_notif_idx.saturating_sub(offset) {
-                    Style::default().add_modifier(Modifier::REVERSED)
-                } else {
-                    Style::default()
+                let mut type_style = Style::default().fg(type_color);
+                let mut repo_style = Style::default();
+                let mut row_style = Style::default();
+
+                if i == selected_notif_idx.saturating_sub(offset) {
+                    row_style = row_style.add_modifier(Modifier::REVERSED);
                 };
+                if !notif.unread {
+                    // row_style = row_style.add_modifier(Modifier::DIM);
+                    type_style = type_style.fg(Color::DarkGray);
+                    repo_style = repo_style.fg(Color::DarkGray);
+                }
 
+                let title = notif.subject.title.as_str();
                 Row::new(vec![
-                    Cell::from(GitHub::repo_name(&n.repository)),
-                    Cell::from(format!("{type_} {title}")).style(Style::default().fg(type_color)),
+                    Cell::from(GitHub::repo_name(&notif.repository)).style(repo_style),
+                    Cell::from(format!("{type_} {title}")).style(type_style),
                 ])
                 .style(row_style)
             })
