@@ -1,5 +1,8 @@
 use futures_executor::block_on;
-use octocrab::{models::activity::Notification, Octocrab, Page};
+use octocrab::{
+    models::{activity::Notification, Repository},
+    Octocrab, Page,
+};
 
 use crate::error::{Error, Result};
 
@@ -21,6 +24,16 @@ impl GitHub {
     pub fn token_from_env() -> Result<Self> {
         let token = std::env::var("GITHUB_TOKEN").map_err(|_| Error::Authentication)?;
         Self::new(&token)
+    }
+
+    pub fn repo_name(repo: &Repository) -> String {
+        let name = repo.name.as_str();
+        let author = repo
+            .owner
+            .as_ref()
+            .map(|o| o.login.clone())
+            .unwrap_or_default();
+        format!("{author}/{name}")
     }
 
     pub fn open_notification(&mut self, notif: &Notification) -> Result<String> {
