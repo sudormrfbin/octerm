@@ -3,6 +3,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
     Authentication,
+    UrlNotFound,
     Octocrab(octocrab::Error),
     CrossTerm(crossterm::ErrorKind),
 }

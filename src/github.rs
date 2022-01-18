@@ -23,6 +23,39 @@ impl GitHub {
         Self::new(&token)
     }
 
+    pub fn open_notification(&mut self, notif: &Notification) -> Result<String> {
+        let default_url = notif.subject.url.as_ref().ok_or(Error::UrlNotFound);
+        match notif.subject.type_.as_str() {
+            "Release" => {
+                let release: octocrab::models::repos::Release =
+                    block_on(octocrab::instance().get(default_url?, None::<&()>))?;
+                return Ok(release.html_url.to_string());
+            }
+            "Issue" => match notif.subject.latest_comment_url {
+                Some(ref url) => {
+                    let comment: octocrab::models::issues::Comment =
+                        block_on(octocrab::instance().get(url, None::<&()>))?;
+                    return Ok(comment.html_url.to_string());
+                }
+                None => {
+                    // TODO: Return last (newest) comment in thread
+                    let issue: octocrab::models::issues::Issue =
+                        block_on(octocrab::instance().get(default_url?, None::<&()>))?;
+                    return Ok(issue.html_url.to_string());
+                }
+            },
+            "PullRequest" => {
+                // BUG: In case of PRs, the url is simple, without the latest comment,
+                // changed files, etc. Therefore the behavior is different from clicking
+                // a PR notification in the web ui, which would show the latest change.
+                let pr: octocrab::models::pulls::PullRequest =
+                    block_on(octocrab::instance().get(default_url?, None::<&()>))?;
+                return Ok(pr.html_url.ok_or(Error::UrlNotFound)?.to_string());
+            }
+            _ => return Err(Error::UrlNotFound),
+        }
+    }
+
     pub fn notifications(&mut self, reload: bool) -> Result<&Page<Notification>> {
         if self.notif_cache.is_none() || reload {
             let notifs = block_on(self.octocrab.activity().notifications().list().send())

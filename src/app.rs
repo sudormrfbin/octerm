@@ -55,6 +55,7 @@ impl App {
 
         self.event_loop(&mut terminal, tick_rate)?;
 
+        // TODO: Add custom panic handler to restore terminal state
         disable_raw_mode()?;
         execute!(
             terminal.backend_mut(),
@@ -83,6 +84,7 @@ impl App {
                 if let Event::Key(key) = crossterm::event::read()? {
                     match key.code {
                         KeyCode::Char(c) => self.on_key(c),
+                        KeyCode::Enter => self.on_enter(),
                         _ => {}
                     }
                 }
@@ -96,6 +98,23 @@ impl App {
                 return Ok(());
             }
         }
+    }
+
+    fn on_enter(&mut self) {
+        let notifs = match self.github.notifications(self.state.reload_notifications) {
+            Ok(n) => n,
+            Err(_) => return, // TODO: Display error
+        };
+        let notif = notifs
+            .into_iter()
+            .nth(self.state.selected_notification_index)
+            .unwrap()
+            .clone();
+        let url = match self.github.open_notification(&notif) {
+            Ok(u) => u,
+            Err(_) => return, // TODO: Display error
+        };
+        let _ = open::that(url.as_str()); // TODO: Display error
     }
 
     fn on_key(&mut self, key: char) {
