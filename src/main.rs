@@ -2,6 +2,7 @@ mod app;
 mod error;
 mod github;
 mod keybind;
+mod ui;
 
 use std::time::Duration;
 
