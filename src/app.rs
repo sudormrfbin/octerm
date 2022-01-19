@@ -8,6 +8,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use octocrab::Octocrab;
 use tui::{
     backend::{Backend, CrosstermBackend},
     Terminal,
@@ -15,33 +16,29 @@ use tui::{
 
 use crate::{error::Result, github::GitHub};
 
-pub struct App {
-    github: GitHub,
+pub struct App<'a> {
+    github: GitHub<'a>,
     state: AppState,
 }
 
 pub struct AppState {
     pub should_quit: bool,
-    pub reload_notifications: bool,
     pub selected_notification_index: usize,
-    pub notifications_len: usize,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
             should_quit: false,
-            reload_notifications: false,
             selected_notification_index: 0,
-            notifications_len: 0,
         }
     }
 }
 
-impl App {
-    pub fn new() -> Result<Self> {
+impl<'a> App<'a> {
+    pub fn new(octocrab_: &'a Octocrab) -> Result<Self> {
         Ok(Self {
-            github: GitHub::token_from_env()?,
+            github: GitHub::new(octocrab_)?,
             state: AppState::default(),
         })
     }
@@ -101,7 +98,7 @@ impl App {
     }
 
     fn on_enter(&mut self) {
-        let notifs = match self.github.notifications(self.state.reload_notifications) {
+        let notifs = match self.github.notif.get_unread() {
             Ok(n) => n,
             Err(_) => return, // TODO: Display error
         };
@@ -110,7 +107,7 @@ impl App {
             .nth(self.state.selected_notification_index)
             .unwrap()
             .clone();
-        let url = match self.github.open_notification(&notif) {
+        let url = match self.github.notif.open(&notif) {
             Ok(u) => u,
             Err(_) => return, // TODO: Display error
         };
@@ -125,26 +122,30 @@ impl App {
             // out in the web ui instead of being removed completely. The API currently
             // provides no way to mark as done.
             'd' => {
-                let notifs = match self.github.notifications(self.state.reload_notifications) {
-                    Ok(n) => n,
-                    Err(_) => return, // TODO: Display error
-                };
-                let notif = notifs
-                    .into_iter()
+                let notif = self
+                    .github
+                    .notif
                     .nth(self.state.selected_notification_index)
                     .unwrap()
                     .clone();
-                let _ = self.github.mark_as_read(notif); // TODO: Display error
-                self.state.notifications_len = self.state.notifications_len.saturating_sub(1);
+                let _ = self.github.notif.mark_as_read(&notif); // TODO: Display error
+                // If last item is deleted, cursor has to moved to previous line
+                self.state.selected_notification_index = self
+                    .state
+                    .selected_notification_index
+                    .min(self.github.notif.len().saturating_sub(1));
             }
-            'R' => s.reload_notifications = true,
+            'R' => {
+                let _ = self.github.notif.refresh(); // TODO: Display error
+                s.selected_notification_index = 0;
+            }
             'g' => s.selected_notification_index = 0,
-            'G' => s.selected_notification_index = s.notifications_len.saturating_sub(1),
+            'G' => s.selected_notification_index = self.github.notif.len().saturating_sub(1),
             'j' => {
                 s.selected_notification_index = s
                     .selected_notification_index
                     .add(1)
-                    .min(s.notifications_len.saturating_sub(1))
+                    .min(self.github.notif.len().saturating_sub(1))
             }
             'k' => s.selected_notification_index = s.selected_notification_index.saturating_sub(1),
             _ => (),
@@ -164,23 +165,17 @@ mod ui {
     use crate::{app::App, github::GitHub};
 
     pub fn draw_notifications<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
-        let notifications = app.github.notifications(app.state.reload_notifications);
-        if app.state.reload_notifications {
-            app.state.selected_notification_index = 0;
-            app.state.reload_notifications = false;
-        }
+        let notifications = app.github.notif.get_unread();
 
         let notifications = match notifications {
             Ok(n) => n,
             Err(err) => {
-                app.state.notifications_len = 0;
                 let paragraph = Paragraph::new(format!("{:?}", err))
                     .block(Block::default().title("Error").borders(Borders::ALL));
                 f.render_widget(paragraph, area);
                 return;
             }
         };
-        app.state.notifications_len = notifications.into_iter().len();
 
         let selected_notif_idx = app.state.selected_notification_index;
         let offset = selected_notif_idx // 6 for border, header, padding
@@ -222,7 +217,7 @@ mod ui {
             })
             .collect();
 
-        let table_title = format!("Notifications ({})", app.state.notifications_len);
+        let table_title = format!("Notifications ({})", app.github.notif.len());
         let table = Table::new(notifications)
             .header(
                 Row::new(vec!["Repo", "Notification"])

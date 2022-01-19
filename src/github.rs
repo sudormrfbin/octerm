@@ -6,24 +6,17 @@ use octocrab::{
 
 use crate::error::{Error, Result};
 
-pub struct GitHub {
-    octocrab: Octocrab,
-    notif_cache: Option<Page<Notification>>,
+pub struct GitHub<'gh> {
+    pub octocrab: &'gh Octocrab,
+    pub notif: NotificationStore<'gh>,
 }
 
-impl GitHub {
-    fn new(token: &str) -> Result<Self> {
+impl<'gh> GitHub<'gh> {
+    pub fn new(octocrab_: &'gh Octocrab) -> Result<Self> {
         Ok(Self {
-            octocrab: Octocrab::builder()
-                .personal_token(token.to_string())
-                .build()?,
-            notif_cache: None,
+            notif: NotificationStore::new(octocrab_),
+            octocrab: octocrab_,
         })
-    }
-
-    pub fn token_from_env() -> Result<Self> {
-        let token = std::env::var("GITHUB_TOKEN").map_err(|_| Error::Authentication)?;
-        Self::new(&token)
     }
 
     /// Constructs a "repo_author/repo_name" string normally seen on GitHub.
@@ -36,9 +29,49 @@ impl GitHub {
             .unwrap_or_default();
         format!("{author}/{name}")
     }
+}
 
-    /// Returns the url the notification points to.
-    pub fn open_notification(&mut self, notif: &Notification) -> Result<String> {
+pub struct NotificationStore<'octo> {
+    octocrab: &'octo Octocrab,
+    cache: Option<Page<Notification>>,
+}
+
+impl<'octo> NotificationStore<'octo> {
+    pub fn new(octo: &'octo Octocrab) -> Self {
+        Self {
+            octocrab: octo,
+            cache: None,
+        }
+    }
+
+    /// Get the nth notification in the cache.
+    pub fn nth(&self, idx: usize) -> Option<&Notification> {
+        self.cache.as_ref()?.items.iter().nth(idx)
+    }
+
+    /// Number of notifications in the cache.
+    pub fn len(&self) -> usize {
+        self.cache.as_ref().map(|c| c.items.len()).unwrap_or(0)
+    }
+
+    /// Get all unread notifications. Results are retrieved from a cache if
+    /// possible. Call [`Self::refresh()`] to refresh the cache.
+    pub fn get_unread(&mut self) -> Result<&[Notification]> {
+        if self.cache.is_none() {
+            self.refresh()?;
+        }
+        return Ok(self.cache.as_ref().unwrap().items.as_slice());
+    }
+
+    pub fn refresh(&mut self) -> Result<()> {
+        let notifs = block_on(self.octocrab.activity().notifications().list().send())
+            .map_err(Error::from)?;
+        self.cache = Some(notifs);
+        Ok(())
+    }
+
+    /// Returns the url a notification points to.
+    pub fn open(&mut self, notif: &Notification) -> Result<String> {
         let default_url = notif.subject.url.as_ref().ok_or(Error::UrlNotFound);
         match notif.subject.type_.as_str() {
             "Release" => {
@@ -71,22 +104,18 @@ impl GitHub {
         }
     }
 
-    /// Get all unread notifications.
-    pub fn notifications(&mut self, reload: bool) -> Result<&Page<Notification>> {
-        if self.notif_cache.is_none() || reload {
-            let notifs = block_on(self.octocrab.activity().notifications().list().send())
-                .map_err(Error::from)?;
-            self.notif_cache = Some(notifs);
-        }
-        return Ok(self.notif_cache.as_ref().unwrap());
-    }
-
-    pub fn mark_as_read(&mut self, notif: Notification) -> Result<()>{
-        block_on(self.octocrab.activity().notifications().mark_as_read(notif.id))?;
-        if let Some(ref mut c) = self.notif_cache {
+    pub fn mark_as_read(&mut self, notif: &Notification) -> Result<()> {
+        block_on(
+            self.octocrab
+                .activity()
+                .notifications()
+                .mark_as_read(notif.id),
+        )?;
+        if let Some(ref mut c) = self.cache {
             let idx = c.items.iter().position(|n| n.id == notif.id).unwrap();
             c.items.remove(idx);
         }
         Ok(())
     }
 }
+
