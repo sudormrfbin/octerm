@@ -74,10 +74,19 @@ impl GitHub {
     /// Get all unread notifications.
     pub fn notifications(&mut self, reload: bool) -> Result<&Page<Notification>> {
         if self.notif_cache.is_none() || reload {
-            let notifs = block_on(self.octocrab.activity().notifications().list().all(true).send())
+            let notifs = block_on(self.octocrab.activity().notifications().list().send())
                 .map_err(Error::from)?;
             self.notif_cache = Some(notifs);
         }
         return Ok(self.notif_cache.as_ref().unwrap());
+    }
+
+    pub fn mark_as_read(&mut self, notif: Notification) -> Result<()>{
+        block_on(self.octocrab.activity().notifications().mark_as_read(notif.id))?;
+        if let Some(ref mut c) = self.notif_cache {
+            let idx = c.items.iter().position(|n| n.id == notif.id).unwrap();
+            c.items.remove(idx);
+        }
+        Ok(())
     }
 }

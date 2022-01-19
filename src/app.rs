@@ -121,7 +121,23 @@ impl App {
         let s = &mut self.state;
         match key {
             'q' => s.should_quit = true,
-            'r' => s.reload_notifications = true,
+            // TODO: This only marks as read, not done; i.e. it will be showed grayed
+            // out in the web ui instead of being removed completely. The API currently
+            // provides no way to mark as done.
+            'd' => {
+                let notifs = match self.github.notifications(self.state.reload_notifications) {
+                    Ok(n) => n,
+                    Err(_) => return, // TODO: Display error
+                };
+                let notif = notifs
+                    .into_iter()
+                    .nth(self.state.selected_notification_index)
+                    .unwrap()
+                    .clone();
+                let _ = self.github.mark_as_read(notif); // TODO: Display error
+                self.state.notifications_len = self.state.notifications_len.saturating_sub(1);
+            }
+            'R' => s.reload_notifications = true,
             'g' => s.selected_notification_index = 0,
             'G' => s.selected_notification_index = s.notifications_len.saturating_sub(1),
             'j' => {
