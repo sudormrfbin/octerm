@@ -19,5 +19,3 @@ impl From<octocrab::Error> for Error {
         Self::Octocrab(e)
     }
 }
-
-

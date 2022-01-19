@@ -1,6 +1,7 @@
 mod app;
 mod error;
 mod github;
+mod keybind;
 
 use std::time::Duration;
 

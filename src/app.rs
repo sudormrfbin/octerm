@@ -1,7 +1,4 @@
-use std::{
-    ops::Add,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -17,8 +14,8 @@ use tui::{
 use crate::{error::Result, github::GitHub};
 
 pub struct App<'a> {
-    github: GitHub<'a>,
-    state: AppState,
+    pub github: GitHub<'a>,
+    pub state: AppState,
 }
 
 pub struct AppState {
@@ -98,58 +95,22 @@ impl<'a> App<'a> {
     }
 
     fn on_enter(&mut self) {
-        let notifs = match self.github.notif.get_unread() {
-            Ok(n) => n,
-            Err(_) => return, // TODO: Display error
-        };
-        let notif = notifs
-            .into_iter()
-            .nth(self.state.selected_notification_index)
-            .unwrap()
-            .clone();
-        let url = match self.github.notif.open(&notif) {
-            Ok(u) => u,
-            Err(_) => return, // TODO: Display error
-        };
-        let _ = open::that(url.as_str()); // TODO: Display error
+        // TODO: Display error
+        let _ = crate::keybind::actions::open_in_browser(self);
     }
 
     fn on_key(&mut self, key: char) {
-        let s = &mut self.state;
-        match key {
-            'q' => s.should_quit = true,
-            // TODO: This only marks as read, not done; i.e. it will be showed grayed
-            // out in the web ui instead of being removed completely. The API currently
-            // provides no way to mark as done.
-            'd' => {
-                let notif = self
-                    .github
-                    .notif
-                    .nth(self.state.selected_notification_index)
-                    .unwrap()
-                    .clone();
-                let _ = self.github.notif.mark_as_read(&notif); // TODO: Display error
-                // If last item is deleted, cursor has to moved to previous line
-                self.state.selected_notification_index = self
-                    .state
-                    .selected_notification_index
-                    .min(self.github.notif.len().saturating_sub(1));
-            }
-            'R' => {
-                let _ = self.github.notif.refresh(); // TODO: Display error
-                s.selected_notification_index = 0;
-            }
-            'g' => s.selected_notification_index = 0,
-            'G' => s.selected_notification_index = self.github.notif.len().saturating_sub(1),
-            'j' => {
-                s.selected_notification_index = s
-                    .selected_notification_index
-                    .add(1)
-                    .min(self.github.notif.len().saturating_sub(1))
-            }
-            'k' => s.selected_notification_index = s.selected_notification_index.saturating_sub(1),
-            _ => (),
-        }
+        use crate::keybind::actions;
+        let _ = match key { // TODO: Display error
+            'q' => actions::quit(self),
+            'd' => actions::mark_as_read(self),
+            'R' => actions::refresh(self),
+            'g' => actions::goto_begin(self),
+            'G' => actions::goto_end(self),
+            'j' => actions::next_item(self),
+            'k' => actions::previous_item(self),
+            _ => return,
+        };
     }
 }
 

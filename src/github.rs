@@ -118,4 +118,3 @@ impl<'octo> NotificationStore<'octo> {
         Ok(())
     }
 }
-
