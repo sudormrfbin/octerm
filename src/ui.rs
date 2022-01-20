@@ -8,6 +8,38 @@ use tui::{
 
 use crate::{app::App, github::GitHub};
 
+pub fn draw_ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
+    let area = f.size();
+    let notif_area = Rect {
+        x: area.x,
+        y: area.y,
+        height: area.height.saturating_sub(1),
+        width: area.width,
+    };
+    let status_area = Rect {
+        x: area.x,
+        y: area.bottom(),
+        height: 1,
+        width: area.width,
+    };
+    draw_notifications(f, app, notif_area);
+    draw_status(f, app, status_area);
+}
+
+pub fn draw_status<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
+    let (msg, status) = match &app.state.status_message {
+        Some(s) => s,
+        None => return,
+    };
+    let msg_color = match status.as_str() {
+        "info" => Color::Blue,
+        "error" => Color::Red,
+        _ => unreachable!(),
+    };
+    let paragraph = Paragraph::new(msg.as_str()).style(Style::default().fg(msg_color));
+    f.render_widget(paragraph, area);
+}
+
 pub fn draw_notifications<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
     let notifications = app.github.notif.get_unread();
 
