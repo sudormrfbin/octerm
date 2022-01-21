@@ -18,7 +18,7 @@ pub fn draw_ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     };
     let status_area = Rect {
         x: area.x,
-        y: area.bottom(),
+        y: notif_area.bottom(),
         height: 1,
         width: area.width,
     };
@@ -41,24 +41,14 @@ pub fn draw_status<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
 }
 
 pub fn draw_notifications<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
-    let notifications = app.github.notif.get_unread();
-
-    let notifications = match notifications {
-        Ok(n) => n,
-        Err(err) => {
-            let paragraph = Paragraph::new(format!("{:?}", err))
-                .block(Block::default().title("Error").borders(Borders::ALL));
-            f.render_widget(paragraph, area);
-            return;
-        }
-    };
+    let notifications = app.github.notif.unread().unwrap_or_default();
 
     let selected_notif_idx = app.state.selected_notification_index;
     let offset = selected_notif_idx // 6 for border, header, padding
         .saturating_sub(area.height.saturating_sub(6).into());
 
     let notifications: Vec<_> = notifications
-        .into_iter()
+        .iter()
         .skip(offset)
         .enumerate()
         .map(|(i, notif)| {

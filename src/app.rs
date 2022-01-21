@@ -1,25 +1,17 @@
-use std::time::{Duration, Instant};
+use std::sync::mpsc::Sender;
 
-use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use octocrab::Octocrab;
-use tui::{
-    backend::{Backend, CrosstermBackend},
-    Terminal,
-};
+use crate::{events::NotifEvent, github::GitHub};
 
-use crate::{error::Result, github::GitHub, ui};
-
-pub struct App<'a> {
-    pub github: GitHub<'a>,
+pub struct App {
+    pub github: GitHub,
     pub state: AppState,
+    pub event_tx: Sender<NotifEvent>,
 }
 
 pub struct AppState {
+    pub open_url: Option<String>,
     pub should_quit: bool,
+    pub is_loading: bool,
     pub status_message: Option<(String, String)>,
     pub selected_notification_index: usize,
 }
@@ -32,90 +24,70 @@ impl AppState {
     pub fn clear_status(&mut self) {
         self.status_message = None;
     }
+
+    pub fn get_status(&mut self) -> Option<&str> {
+        self.status_message.as_ref().map(|(msg, _)| msg.as_str())
+    }
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
+            open_url: None,
             should_quit: false,
+            is_loading: false,
             status_message: None,
             selected_notification_index: 0,
         }
     }
 }
 
-impl<'a> App<'a> {
-    pub fn new(octocrab_: &'a Octocrab) -> Result<Self> {
-        Ok(Self {
-            github: GitHub::new(octocrab_)?,
+impl App {
+    pub fn new(event_tx: Sender<NotifEvent>) -> Self {
+        Self {
+            github: GitHub::new(),
             state: AppState::default(),
-        })
+            event_tx,
+        }
     }
 
-    pub fn run(self, tick_rate: Duration) -> Result<()> {
-        enable_raw_mode()?;
-        let mut stdout = std::io::stdout();
-        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-        let backend = CrosstermBackend::new(stdout);
-        let mut terminal = Terminal::new(backend)?;
+    pub fn dispatch_event(&mut self, event: NotifEvent) -> std::result::Result<(), String> {
+        // Will be set to false after async request is completed
+        self.state.is_loading = true;
+        self.event_tx
+            .send(event)
+            .map_err(|_| "Could not communicate with network thread".to_string())
+    }
 
-        self.event_loop(&mut terminal, tick_rate)?;
+    pub fn on_tick(&mut self) -> std::result::Result<(), String> {
+        const LOADING_DISPLAY: &str = "Loading...";
 
-        // TODO: Add custom panic handler to restore terminal state
-        disable_raw_mode()?;
-        execute!(
-            terminal.backend_mut(),
-            LeaveAlternateScreen,
-            DisableMouseCapture
-        )?;
+        if self.state.is_loading && self.state.status_message.is_none() {
+            self.state.set_status(LOADING_DISPLAY, "info");
+        }
+
+        if !self.state.is_loading && self.state.get_status() == Some(LOADING_DISPLAY) {
+            self.state.clear_status();
+        }
+
+        // Ensure cursor is always on a notification
+        self.state.selected_notification_index = self
+            .state
+            .selected_notification_index
+            .min(self.github.notif.len().saturating_sub(1));
+
+        if let Some(url) = self.state.open_url.take() {
+            open::that(url.as_str()).map_err(|_| "Could not open a browser")?;
+        }
 
         Ok(())
     }
 
-    fn event_loop<B: Backend>(
-        mut self,
-        terminal: &mut Terminal<B>,
-        tick_rate: Duration,
-    ) -> Result<()> {
-        let mut last_tick = Instant::now();
-
-        loop {
-            terminal.draw(|f| ui::draw_ui(f, &mut self))?;
-
-            let timeout = tick_rate
-                .checked_sub(last_tick.elapsed())
-                .unwrap_or_else(|| Duration::from_secs(0));
-
-            if crossterm::event::poll(timeout)? {
-                if let Event::Key(key) = crossterm::event::read()? {
-                    self.state.clear_status();
-
-                    let result = match key.code {
-                        KeyCode::Char(c) => self.on_key(c),
-                        KeyCode::Enter => self.on_enter(),
-                        _ => Ok(()),
-                    };
-                    if let Err(err) = result {
-                        self.state.set_status(&err, "error");
-                    }
-                }
-            }
-
-            if last_tick.elapsed() >= tick_rate {
-                last_tick = Instant::now();
-            }
-
-            if self.state.should_quit {
-                return Ok(());
-            }
-        }
-    }
-
-    fn on_enter(&mut self) -> std::result::Result<(), String> {
+    pub fn on_enter(&mut self) -> std::result::Result<(), String> {
         crate::keybind::actions::open_in_browser(self)
     }
 
-    fn on_key(&mut self, key: char) -> std::result::Result<(), String> {
+    pub fn on_key(&mut self, key: char) -> std::result::Result<(), String> {
         use crate::keybind::actions;
         match key {
             'q' => actions::quit(self),

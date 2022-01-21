@@ -1,7 +1,7 @@
 pub mod actions {
     use std::ops::Add;
 
-    use crate::app::App;
+    use crate::{app::App, events::NotifEvent};
 
     pub fn quit(app: &mut App) -> Result<(), String> {
         app.state.should_quit = true;
@@ -18,15 +18,8 @@ pub mod actions {
             .nth(app.state.selected_notification_index)
             .ok_or("Failed to get the current notification")?
             .clone();
-        app.github
-            .notif
-            .mark_as_read(&notif)
-            .map_err(|_| "Failed to mark notification as read")?;
-        // If last item is deleted, cursor has to moved to previous line
-        app.state.selected_notification_index = app
-            .state
-            .selected_notification_index
-            .min(app.github.notif.len().saturating_sub(1));
+
+        app.dispatch_event(NotifEvent::MarkAsRead(notif))?;
         Ok(())
     }
 
@@ -37,21 +30,13 @@ pub mod actions {
             .nth(app.state.selected_notification_index)
             .ok_or("Failed to get the current notification")?
             .clone();
-        let url = app
-            .github
-            .notif
-            .open(&notif)
-            .map_err(|_| "Failed to get notification target url")?;
-        open::that(url.as_str()).map_err(|_| "Could not open a browser")?;
+
+        app.dispatch_event(NotifEvent::Open(notif))?;
         Ok(())
     }
 
     pub fn refresh(app: &mut App) -> Result<(), String> {
-        app.github
-            .notif
-            .refresh()
-            .map_err(|_| "Failed to refresh")?;
-        app.state.selected_notification_index = 0;
+        app.dispatch_event(NotifEvent::Refresh)?;
         Ok(())
     }
 
