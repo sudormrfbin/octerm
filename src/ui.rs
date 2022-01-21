@@ -66,7 +66,7 @@ pub fn draw_notifications<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rec
             let mut row_style = Style::default();
 
             if i == selected_notif_idx.saturating_sub(offset) {
-                row_style = row_style.add_modifier(Modifier::REVERSED);
+                row_style = row_style.bg(Color::Rgb(62, 68, 82));
             };
             if !notif.unread {
                 // row_style = row_style.add_modifier(Modifier::DIM);
