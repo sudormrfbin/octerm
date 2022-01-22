@@ -6,7 +6,7 @@ use tui::{
     Frame,
 };
 
-use crate::{app::App, github::GitHub};
+use crate::{app::App, github::{GitHub, IssueState, NotificationTarget, PullRequestState}};
 
 pub fn draw_ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let area = f.size();
@@ -52,13 +52,20 @@ pub fn draw_notifications<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rec
         .skip(offset)
         .enumerate()
         .map(|(i, notif)| {
-            let (type_, type_color) = match notif.subject.type_.as_str() {
-                "Issue" => ("", Color::LightGreen),
-                "PullRequest" => ("", Color::LightMagenta),
-                "CheckSuite" => ("", Color::Red),
-                "Release" => ("", Color::Blue),
-                "Discussion" => ("", Color::Yellow),
-                _ => ("", Color::White),
+            let (type_, type_color) = match notif.target {
+                NotificationTarget::Issue(ref issue) => match issue.state{
+                    IssueState::Open => ("", Color::LightGreen),
+                    IssueState::Closed => ("", Color::Red),
+                }
+                NotificationTarget::PullRequest(ref pr) => match pr.state {
+                    PullRequestState::Open => ("", Color::Green),
+                    PullRequestState::Merged => ("", Color::Magenta),
+                    PullRequestState::Closed => ("", Color::Red),
+                }
+                NotificationTarget::CiBuild => ("", Color::Red),
+                NotificationTarget::Release(_) => ("", Color::Blue),
+                NotificationTarget::Discussion => ("", Color::Yellow),
+                NotificationTarget::Unknown => ("", Color::White),
             };
 
             let mut type_style = Style::default().fg(type_color);
@@ -68,15 +75,15 @@ pub fn draw_notifications<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rec
             if i == selected_notif_idx.saturating_sub(offset) {
                 row_style = row_style.bg(Color::Rgb(62, 68, 82));
             };
-            if !notif.unread {
+            if !notif.inner.unread {
                 // row_style = row_style.add_modifier(Modifier::DIM);
                 type_style = type_style.fg(Color::DarkGray);
                 repo_style = repo_style.fg(Color::DarkGray);
             }
 
-            let title = notif.subject.title.as_str();
+            let title = notif.inner.subject.title.as_str();
             Row::new(vec![
-                Cell::from(GitHub::repo_name(&notif.repository)).style(repo_style),
+                Cell::from(GitHub::repo_name(&notif.inner.repository)).style(repo_style),
                 Cell::from(format!("{type_} {title}")).style(type_style),
             ])
             .style(row_style)
