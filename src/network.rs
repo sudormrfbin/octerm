@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use octocrab::Octocrab;
+use tokio::task::JoinHandle;
 
 use crate::app::App;
 use crate::error::{Error, Result};
@@ -36,49 +37,56 @@ impl Network {
             .send()
             .await?;
 
-        let mut result: Vec<Notification> = Vec::new();
+        let mut tasks: Vec<JoinHandle<Result<Notification>>> = Vec::new();
         for notif in notifs.into_iter() {
-            let url = match notif.subject.url.as_ref() {
-                Some(url) => url,
-                None => {
-                    result.push(Notification {
-                        target: match notif.subject.type_.as_str() {
-                            "Discussion" => NotificationTarget::Discussion,
-                            "CheckSuite" => NotificationTarget::CiBuild,
-                            // Issues and PRs usually have a subject url,
-                            // so this is somewhat an edge case.
-                            _ => NotificationTarget::Unknown,
-                        },
-                        inner: notif,
-                    });
-                    continue;
-                }
-            };
-            let target = match notif.subject.type_.as_str() {
-                "Issue" => {
-                    let issue: octocrab::models::issues::Issue =
-                        octocrab::instance().get(url, None::<&()>).await?;
-                    NotificationTarget::Issue(issue.into())
-                }
-                "PullRequest" => {
-                    let pr: octocrab::models::pulls::PullRequest =
-                        octocrab::instance().get(url, None::<&()>).await?;
-                    NotificationTarget::PullRequest(pr.into())
-                }
-                "Release" => {
-                    let release: octocrab::models::repos::Release =
-                        octocrab::instance().get(url, None::<&()>).await?;
-                    NotificationTarget::Release(release.into())
-                }
-                "Discussion" => NotificationTarget::Discussion,
-                "CheckSuite" => NotificationTarget::CiBuild,
-                _ => NotificationTarget::Unknown,
-            };
-            result.push(Notification {
-                inner: notif,
-                target,
-            })
+            tasks.push(tokio::spawn(async move {
+                let url = match notif.subject.url.as_ref() {
+                    Some(url) => url,
+                    None => {
+                        return Ok(Notification {
+                            target: match notif.subject.type_.as_str() {
+                                "Discussion" => NotificationTarget::Discussion,
+                                "CheckSuite" => NotificationTarget::CiBuild,
+                                // Issues and PRs usually have a subject url,
+                                // so this is somewhat an edge case.
+                                _ => NotificationTarget::Unknown,
+                            },
+                            inner: notif,
+                        });
+                    }
+                };
+                let target = match notif.subject.type_.as_str() {
+                    "Issue" => {
+                        let issue: octocrab::models::issues::Issue =
+                            octocrab::instance().get(url, None::<&()>).await?;
+                        NotificationTarget::Issue(issue.into())
+                    }
+                    "PullRequest" => {
+                        let pr: octocrab::models::pulls::PullRequest =
+                            octocrab::instance().get(url, None::<&()>).await?;
+                        NotificationTarget::PullRequest(pr.into())
+                    }
+                    "Release" => {
+                        let release: octocrab::models::repos::Release =
+                            octocrab::instance().get(url, None::<&()>).await?;
+                        NotificationTarget::Release(release.into())
+                    }
+                    "Discussion" => NotificationTarget::Discussion,
+                    "CheckSuite" => NotificationTarget::CiBuild,
+                    _ => NotificationTarget::Unknown,
+                };
+                Ok(Notification {
+                    inner: notif,
+                    target,
+                })
+            }));
         }
+        let mut result: Vec<Notification> = futures::future::join_all(tasks)
+            .await
+            .into_iter()
+            .filter_map(|n| n.ok()?.ok())
+            .collect();
+        result.sort_unstable_by_key(|n| n.inner.updated_at);
 
         let mut app = self.app.lock().await;
         app.github.notif.cache = Some(result);
@@ -86,9 +94,14 @@ impl Network {
     }
 
     pub async fn open(&mut self, notif: &Notification) -> Result<()> {
-        let default_url = notif.inner.subject.url.as_ref().ok_or(Error::HtmlUrlNotFound {
-            api_url: notif.inner.url.to_string(),
-        });
+        let default_url = notif
+            .inner
+            .subject
+            .url
+            .as_ref()
+            .ok_or(Error::HtmlUrlNotFound {
+                api_url: notif.inner.url.to_string(),
+            });
         let url = match notif.inner.subject.type_.as_str() {
             "Release" => {
                 let release: octocrab::models::repos::Release =
