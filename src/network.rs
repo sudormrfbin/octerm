@@ -1,3 +1,4 @@
+use std::result::Result as StdResult;
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
@@ -81,11 +82,16 @@ impl Network {
                 })
             }));
         }
-        let mut result: Vec<Notification> = futures::future::join_all(tasks)
-            .await
+        let result: Vec<StdResult<Result<Notification>, tokio::task::JoinError>> =
+            futures::future::join_all(tasks).await;
+        let result: StdResult<Vec<Result<Notification>>, tokio::task::JoinError> =
+            result.into_iter().collect();
+        let result: Result<Vec<Notification>> = result
+            .map_err(|_| Error::NetworkTask)?
             .into_iter()
-            .filter_map(|n| n.ok()?.ok())
             .collect();
+        // TODO: Remove double collect()
+        let mut result = result?;
         result.sort_unstable_by_key(|n| n.inner.updated_at);
 
         let mut app = self.app.lock().await;

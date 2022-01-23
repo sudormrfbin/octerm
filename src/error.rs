@@ -10,4 +10,6 @@ pub enum Error {
     GitHub(#[from] octocrab::Error),
     #[error("rendering error")]
     CrossTerm(#[from] crossterm::ErrorKind),
+    #[error("could not complete concurrent network requests")]
+    NetworkTask,
 }
