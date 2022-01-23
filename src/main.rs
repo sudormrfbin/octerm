@@ -7,6 +7,7 @@ mod network;
 mod ui;
 
 use std::{
+    error::Error as StdError,
     sync::{mpsc::Receiver, Arc},
     time::{Duration, Instant},
 };
@@ -31,6 +32,7 @@ use crate::network::Network;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    env_logger::init();
     let tick_rate = Duration::from_millis(250);
     let token = std::env::var("GITHUB_TOKEN").map_err(|_| Error::Authentication)?;
     let octocrab_ = Octocrab::builder()
@@ -53,11 +55,10 @@ async fn main() -> Result<()> {
 #[tokio::main]
 async fn start_async_network_io(event_rx: Receiver<NotifEvent>, network: &mut Network) {
     while let Ok(event) = event_rx.recv() {
-        if let Err(_err) = network.handle_event(event).await {
+        if let Err(err) = network.handle_event(event).await {
+            log::error!("Network error: {:?}", err.source());
             let mut app = network.app.lock().await;
-            // TODO: Better error formatting
-            app.state
-                .set_status("Error during network request", "error");
+            app.state.set_status(&format!("Network error: {err}"), "error");
         }
         let mut app = network.app.lock().await;
         app.state.is_loading = false;

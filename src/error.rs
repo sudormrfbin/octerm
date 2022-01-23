@@ -1,21 +1,13 @@
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("authentication with github failed")]
     Authentication,
-    UrlNotFound,
-    Octocrab(octocrab::Error),
-    CrossTerm(crossterm::ErrorKind),
-}
-
-impl From<crossterm::ErrorKind> for Error {
-    fn from(e: crossterm::ErrorKind) -> Self {
-        Self::CrossTerm(e)
-    }
-}
-
-impl From<octocrab::Error> for Error {
-    fn from(e: octocrab::Error) -> Self {
-        Self::Octocrab(e)
-    }
+    #[error("target html url for {api_url} not found")]
+    HtmlUrlNotFound { api_url: String },
+    #[error("could not communicate with github")]
+    GitHub(#[from] octocrab::Error),
+    #[error("rendering error")]
+    CrossTerm(#[from] crossterm::ErrorKind),
 }
