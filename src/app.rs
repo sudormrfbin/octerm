@@ -84,11 +84,11 @@ impl App {
     }
 
     pub fn on_enter(&mut self) -> std::result::Result<(), String> {
-        crate::keybind::actions::open_in_browser(self)
+        crate::actions::open_in_browser(self)
     }
 
     pub fn on_key(&mut self, key: char) -> std::result::Result<(), String> {
-        use crate::keybind::actions;
+        use crate::actions;
         match key {
             'q' => actions::quit(self),
             'd' => actions::mark_as_read(self),

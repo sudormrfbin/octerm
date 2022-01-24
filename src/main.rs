@@ -1,8 +1,8 @@
 mod app;
+mod actions;
 mod error;
 mod events;
 mod github;
-mod keybind;
 mod network;
 mod ui;
 
