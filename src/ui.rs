@@ -2,15 +2,25 @@ use tui::{
     backend::Backend,
     layout::{Constraint, Rect},
     style::{Color, Modifier, Style},
+    text::{Spans, Text},
     widgets::{Block, Borders, Cell, Paragraph, Row, Table},
     Frame,
 };
 
-use crate::{app::App, github::{GitHub, IssueState, NotificationTarget, PullRequestState}};
+use crate::{
+    app::App,
+    github::{GitHub, IssueState, Notification, NotificationTarget, PullRequestState},
+};
+
+#[derive(PartialEq)]
+pub enum Route {
+    Notifications,
+    NotifTarget(Notification),
+}
 
 pub fn draw_ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let area = f.size();
-    let notif_area = Rect {
+    let route_area = Rect {
         x: area.x,
         y: area.y,
         height: area.height.saturating_sub(1),
@@ -18,12 +28,96 @@ pub fn draw_ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     };
     let status_area = Rect {
         x: area.x,
-        y: notif_area.bottom(),
+        y: route_area.bottom(),
         height: 1,
         width: area.width,
     };
-    draw_notifications(f, app, notif_area);
+
+    match app.state.route {
+        Route::Notifications => draw_notifications(f, app, route_area),
+        Route::NotifTarget(_) => draw_notif_target(f, app, route_area),
+    }
     draw_status(f, app, status_area);
+}
+
+macro_rules! span {
+    ($text:expr) => {
+        tui::text::Span::from($text)
+    };
+    ($text:expr, $(fg:$fg:ident)?, $(bg:$bg:ident)?) => {
+        {
+            let mut style = tui::style::Style::default();
+            $( style = style.fg(tui::style::Color::$fg); )?
+            $( style = style.bg(tui::style::Color::$bg); )?
+            tui::text::Span::styled($text, style)
+        }
+    };
+    ($text:expr, $style:expr) => {
+        {
+            tui::text::Span::styled($text, $style)
+        }
+    };
+}
+
+fn draw_notif_target<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
+    let notif = match app.state.route {
+        Route::NotifTarget(ref notif) => notif,
+        Route::Notifications => unreachable!(),
+    };
+
+    let target_color = notif_target_color(&notif.target);
+    let icon_style = Style::default().fg(target_color);
+    let target_style = Style::default().bg(target_color).fg(Color::Black);
+    let title = match notif.target {
+        NotificationTarget::Issue(ref issue) => Spans::from(
+            [
+                span!(issue.icon(), icon_style),
+                span!(" "),
+                span!(issue.title.as_str()),
+                span!(format!(" #{} ", issue.unique), fg: DarkGray,),
+                span!(issue.state.to_string(), target_style),
+            ]
+            .to_vec(),
+        ),
+        NotificationTarget::PullRequest(ref pr) => Spans::from(
+            [
+                span!(pr.icon(), icon_style),
+                span!(" "),
+                span!(pr.title.as_str()),
+                span!(format!(" #{} ", pr.unique), fg: DarkGray,),
+                span!(pr.state.to_string(), target_style),
+            ]
+            .to_vec(),
+        ),
+        NotificationTarget::Release(ref release) => Spans::from(
+            [
+                span!(release.title.as_str()),
+                span!(release.unique.as_str(), fg: DarkGray,),
+            ]
+            .to_vec(),
+        ),
+
+        NotificationTarget::Discussion => "This is a discussion".into(),
+        NotificationTarget::CiBuild => "This is a CI Build".into(),
+        NotificationTarget::Unknown => "This is an unknown item".into(),
+    };
+
+    let body: tui::text::Text = match notif.target {
+        NotificationTarget::Issue(ref issue) => issue.body.as_str(),
+        NotificationTarget::PullRequest(ref pr) => pr.body.as_str(),
+        NotificationTarget::Release(ref release) => release.body.as_str(),
+        _ => "No description provided.",
+    }
+    .into();
+
+    let mut content = Text::from(title);
+    content.extend(Text::raw("\n"));
+    content.extend(body);
+
+    let para = Paragraph::new(content)
+        .block(Block::default().borders(Borders::ALL))
+        .wrap(tui::widgets::Wrap { trim: false });
+    f.render_widget(para, area);
 }
 
 pub fn draw_status<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
@@ -71,7 +165,7 @@ pub fn draw_notifications<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rec
             let title = notif.inner.subject.title.as_str();
             Row::new(vec![
                 Cell::from(GitHub::repo_name(&notif.inner.repository)).style(repo_style),
-                Cell::from(format!("{type_} {title}")).style(type_style),
+                Cell::from(format!("{icon} {title}")).style(type_style),
             ])
             .style(row_style)
         })

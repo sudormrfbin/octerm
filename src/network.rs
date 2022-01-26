@@ -82,6 +82,7 @@ impl Network {
                 })
             }));
         }
+        // TODO: Buffer the requests
         let result: Vec<StdResult<Result<Notification>, tokio::task::JoinError>> =
             futures::future::join_all(tasks).await;
         let result: StdResult<Vec<Result<Notification>>, tokio::task::JoinError> =
@@ -90,7 +91,7 @@ impl Network {
             .map_err(|_| Error::NetworkTask)?
             .into_iter()
             .collect();
-        // TODO: Remove double collect()
+        // TODO: Remove double collect(): try_fold(Vec::new, |...|) ?
         let mut result = result?;
         result.sort_unstable_by_key(|n| n.inner.updated_at);
 

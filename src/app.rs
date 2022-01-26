@@ -1,6 +1,6 @@
 use std::sync::mpsc::Sender;
 
-use crate::{events::NotifEvent, github::GitHub};
+use crate::{events::NotifEvent, github::GitHub, ui::Route};
 
 pub struct App {
     pub github: GitHub,
@@ -10,6 +10,7 @@ pub struct App {
 
 pub struct AppState {
     pub open_url: Option<String>,
+    pub route: Route,
     pub should_quit: bool,
     pub is_loading: bool,
     pub status_message: Option<(String, String)>,
@@ -34,6 +35,7 @@ impl Default for AppState {
     fn default() -> Self {
         Self {
             open_url: None,
+            route: Route::Notifications,
             should_quit: false,
             is_loading: false,
             status_message: None,
@@ -84,13 +86,14 @@ impl App {
     }
 
     pub fn on_enter(&mut self) -> std::result::Result<(), String> {
-        crate::actions::open_in_browser(self)
+        crate::actions::open(self)
     }
 
     pub fn on_key(&mut self, key: char) -> std::result::Result<(), String> {
         use crate::actions;
         match key {
             'q' => actions::quit(self),
+            'o' => actions::open_in_browser(self),
             'd' => actions::mark_as_read(self),
             'R' => actions::refresh(self),
             'g' => actions::goto_begin(self),

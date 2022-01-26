@@ -1,9 +1,13 @@
 use std::ops::Add;
 
-use crate::{app::App, events::NotifEvent};
+use crate::{app::App, events::NotifEvent, ui::Route};
 
 pub fn quit(app: &mut App) -> Result<(), String> {
-    app.state.should_quit = true;
+    if app.state.route != Route::Notifications {
+        app.state.route = Route::Notifications;
+    } else {
+        app.state.should_quit = true;
+    }
     Ok(())
 }
 
@@ -19,6 +23,18 @@ pub fn mark_as_read(app: &mut App) -> Result<(), String> {
         .clone();
 
     app.dispatch_event(NotifEvent::MarkAsRead(notif))?;
+    Ok(())
+}
+
+pub fn open(app: &mut App) -> Result<(), String> {
+    let notif = app
+        .github
+        .notif
+        .nth(app.state.selected_notification_index)
+        .ok_or("Failed to get the current notification")?
+        .clone();
+
+    app.state.route = Route::NotifTarget(notif);
     Ok(())
 }
 

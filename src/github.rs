@@ -1,9 +1,17 @@
+use std::fmt::Display;
+
 use octocrab::models::Repository;
 
 #[derive(Clone)]
 pub struct Notification {
     pub inner: octocrab::models::activity::Notification,
     pub target: NotificationTarget,
+}
+
+impl PartialEq for Notification {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner.id == other.inner.id
+    }
 }
 
 #[derive(Clone)]
@@ -32,6 +40,9 @@ impl NotificationTarget {
 #[derive(Clone)]
 pub struct Issue {
     pub inner: octocrab::models::issues::Issue,
+    pub title: String,
+    pub body: String,
+    pub unique: String,
     pub state: IssueState,
 }
 
@@ -51,6 +62,12 @@ impl From<octocrab::models::issues::Issue> for Issue {
             None => IssueState::Open,
         };
         Self {
+            title: issue.title.clone(),
+            body: issue
+                .body
+                .clone()
+                .unwrap_or("No description provided.".to_string()),
+            unique: issue.number.to_string(),
             inner: issue,
             state,
         }
@@ -63,9 +80,21 @@ pub enum IssueState {
     Closed,
 }
 
+impl Display for IssueState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match *self {
+            Self::Open => "Open",
+            Self::Closed => "Closed",
+        })
+    }
+}
+
 #[derive(Clone)]
 pub struct PullRequest {
     pub inner: octocrab::models::pulls::PullRequest,
+    pub title: String,
+    pub body: String,
+    pub unique: String,
     pub state: PullRequestState,
 }
 
@@ -88,7 +117,16 @@ impl From<octocrab::models::pulls::PullRequest> for PullRequest {
                 None => PullRequestState::Open,
             },
         };
-        Self { inner: pr, state }
+        Self {
+            title: pr.title.clone().unwrap_or_default(),
+            body: pr
+                .body
+                .clone()
+                .unwrap_or("No description provided.".to_string()),
+            unique: pr.number.to_string(),
+            state,
+            inner: pr,
+        }
     }
 }
 
@@ -99,8 +137,21 @@ pub enum PullRequestState {
     Merged,
 }
 
+impl Display for PullRequestState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match *self {
+            Self::Open => "Open",
+            Self::Closed => "Closed",
+            Self::Merged => "Merged",
+        })
+    }
+}
+
 #[derive(Clone)]
 pub struct Release {
+    pub title: String,
+    pub body: String,
+    pub unique: String,
     pub inner: octocrab::models::repos::Release,
 }
 
@@ -112,7 +163,19 @@ impl Release {
 
 impl From<octocrab::models::repos::Release> for Release {
     fn from(release: octocrab::models::repos::Release) -> Self {
-        Self { inner: release }
+        let title = release
+            .name
+            .clone()
+            .unwrap_or_else(|| release.tag_name.clone());
+        Self {
+            title,
+            body: release
+                .body
+                .clone()
+                .unwrap_or("No description provided.".to_string()),
+            unique: release.tag_name.clone(),
+            inner: release,
+        }
     }
 }
 

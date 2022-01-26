@@ -1,5 +1,5 @@
-mod app;
 mod actions;
+mod app;
 mod error;
 mod events;
 mod github;
@@ -62,9 +62,10 @@ async fn main() -> Result<()> {
 async fn start_async_network_io(event_rx: Receiver<NotifEvent>, network: &mut Network) {
     while let Ok(event) = event_rx.recv() {
         if let Err(err) = network.handle_event(event).await {
-            log::error!("Network error: {:?}", err.source());
+            log::error!("Network error: {:?}", err.source().unwrap_or(&err));
             let mut app = network.app.lock().await;
-            app.state.set_status(&format!("Network error: {err}"), "error");
+            app.state
+                .set_status(&format!("Network error: {err}"), "error");
         }
         let mut app = network.app.lock().await;
         app.state.is_loading = false;
