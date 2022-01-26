@@ -35,9 +35,15 @@ async fn main() -> Result<()> {
     env_logger::init();
     let tick_rate = Duration::from_millis(250);
     let token = std::env::var("GITHUB_TOKEN").map_err(|_| Error::Authentication)?;
-    let octocrab_ = Octocrab::builder()
-        .personal_token(token.to_string())
-        .build()?;
+
+    // This initialises a statically counted instance, which is handy
+    // when doing concurrent requests based on tokio tasks.
+    let builder = Octocrab::builder().personal_token(token.clone());
+    octocrab::initialise(builder)?;
+
+    let builder = Octocrab::builder().personal_token(token.clone());
+    let octocrab_ = builder.build()?;
+
     let (event_tx, event_rx) = std::sync::mpsc::channel::<NotifEvent>();
 
     let app = Arc::new(Mutex::new(App::new(event_tx)));
