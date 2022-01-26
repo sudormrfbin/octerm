@@ -114,19 +114,19 @@ impl Network {
         let url = match notif.inner.subject.type_.as_str() {
             "Release" => {
                 let release: octocrab::models::repos::Release =
-                    octocrab::instance().get(default_url?, None::<&()>).await?;
+                    self.octocrab.get(default_url?, None::<&()>).await?;
                 release.html_url.to_string()
             }
             "Issue" => match notif.inner.subject.latest_comment_url {
                 Some(ref url) => {
                     let comment: octocrab::models::issues::Comment =
-                        octocrab::instance().get(url, None::<&()>).await?;
+                        self.octocrab.get(url, None::<&()>).await?;
                     comment.html_url.to_string()
                 }
                 None => {
                     // TODO: Return last (newest) comment in thread
                     let issue: octocrab::models::issues::Issue =
-                        octocrab::instance().get(default_url?, None::<&()>).await?;
+                        self.octocrab.get(default_url?, None::<&()>).await?;
                     issue.html_url.to_string()
                 }
             },
@@ -135,7 +135,7 @@ impl Network {
                 // changed files, etc. Therefore the behavior is different from clicking
                 // a PR notification in the web ui, which would show the latest change.
                 let pr: octocrab::models::pulls::PullRequest =
-                    octocrab::instance().get(default_url?, None::<&()>).await?;
+                    self.octocrab.get(default_url?, None::<&()>).await?;
                 pr.html_url
                     .ok_or(Error::HtmlUrlNotFound {
                         api_url: notif.inner.url.to_string(),
