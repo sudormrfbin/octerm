@@ -52,21 +52,8 @@ pub fn draw_notifications<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rec
         .skip(offset)
         .enumerate()
         .map(|(i, notif)| {
-            let (type_, type_color) = match notif.target {
-                NotificationTarget::Issue(ref issue) => match issue.state{
-                    IssueState::Open => ("", Color::LightGreen),
-                    IssueState::Closed => ("", Color::Red),
-                }
-                NotificationTarget::PullRequest(ref pr) => match pr.state {
-                    PullRequestState::Open => ("", Color::Green),
-                    PullRequestState::Merged => ("", Color::Magenta),
-                    PullRequestState::Closed => ("", Color::Red),
-                }
-                NotificationTarget::CiBuild => ("", Color::Red),
-                NotificationTarget::Release(_) => ("", Color::Blue),
-                NotificationTarget::Discussion => ("", Color::Yellow),
-                NotificationTarget::Unknown => ("", Color::White),
-            };
+            let icon = notif.target.icon();
+            let type_color = notif_target_color(&notif.target);
 
             let mut type_style = Style::default().fg(type_color);
             let mut repo_style = Style::default();
@@ -101,4 +88,22 @@ pub fn draw_notifications<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rec
         .style(Style::default().fg(Color::White));
 
     f.render_widget(table, area);
+}
+
+fn notif_target_color(target: &NotificationTarget) -> Color {
+    match target {
+        NotificationTarget::Issue(ref issue) => match issue.state {
+            IssueState::Open => Color::LightGreen,
+            IssueState::Closed => Color::Red,
+        },
+        NotificationTarget::PullRequest(ref pr) => match pr.state {
+            PullRequestState::Open => Color::Green,
+            PullRequestState::Merged => Color::Magenta,
+            PullRequestState::Closed => Color::Red,
+        },
+        NotificationTarget::CiBuild => Color::Red,
+        NotificationTarget::Release(_) => Color::Blue,
+        NotificationTarget::Discussion => Color::Yellow,
+        NotificationTarget::Unknown => Color::White,
+    }
 }

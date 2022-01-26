@@ -16,10 +16,32 @@ pub enum NotificationTarget {
     Unknown,
 }
 
+impl NotificationTarget {
+    pub fn icon(&self) -> &'static str {
+        match *self {
+            NotificationTarget::Issue(ref i) => i.icon(),
+            NotificationTarget::PullRequest(ref p) => p.icon(),
+            NotificationTarget::Release(ref r) => r.icon(),
+            NotificationTarget::Discussion => "",
+            NotificationTarget::CiBuild => "",
+            NotificationTarget::Unknown => "",
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Issue {
     pub inner: octocrab::models::issues::Issue,
     pub state: IssueState,
+}
+
+impl Issue {
+    pub fn icon(&self) -> &'static str {
+        match self.state {
+            IssueState::Open => "",
+            IssueState::Closed => "",
+        }
+    }
 }
 
 impl From<octocrab::models::issues::Issue> for Issue {
@@ -47,6 +69,16 @@ pub struct PullRequest {
     pub state: PullRequestState,
 }
 
+impl PullRequest {
+    pub fn icon(&self) -> &'static str {
+        match self.state {
+            PullRequestState::Open => "",
+            PullRequestState::Merged => "",
+            PullRequestState::Closed => "",
+        }
+    }
+}
+
 impl From<octocrab::models::pulls::PullRequest> for PullRequest {
     fn from(pr: octocrab::models::pulls::PullRequest) -> Self {
         let state = match pr.merged_at {
@@ -70,6 +102,12 @@ pub enum PullRequestState {
 #[derive(Clone)]
 pub struct Release {
     pub inner: octocrab::models::repos::Release,
+}
+
+impl Release {
+    pub fn icon(&self) -> &'static str {
+        return "";
+    }
 }
 
 impl From<octocrab::models::repos::Release> for Release {
