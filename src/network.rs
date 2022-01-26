@@ -85,15 +85,17 @@ impl Network {
         // TODO: Buffer the requests
         let result: Vec<StdResult<Result<Notification>, tokio::task::JoinError>> =
             futures::future::join_all(tasks).await;
-        let result: StdResult<Vec<Result<Notification>>, tokio::task::JoinError> =
-            result.into_iter().collect();
-        let result: Result<Vec<Notification>> = result
-            .map_err(|_| Error::NetworkTask)?
-            .into_iter()
-            .collect();
-        // TODO: Remove double collect(): try_fold(Vec::new, |...|) ?
-        let mut result = result?;
+        let vec = Vec::with_capacity(result.len());
+        let mut result =
+            result
+                .into_iter()
+                .try_fold(vec, |mut acc, task| {
+                    let notif = task.map_err(|_| Error::NetworkTask)?;
+                    acc.push(notif?);
+                    Ok::<Vec<Notification>, Error>(acc)
+                })?;
         result.sort_unstable_by_key(|n| n.inner.updated_at);
+        result.reverse(); // Most recent on top
 
         let mut app = self.app.lock().await;
         app.github.notif.cache = Some(result);
