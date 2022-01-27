@@ -13,21 +13,36 @@ pub struct AppState {
     pub route: Route,
     pub should_quit: bool,
     pub is_loading: bool,
-    pub status_message: Option<(String, String)>,
+    pub statusline: StatusLine,
     pub selected_notification_index: usize,
 }
 
-impl AppState {
-    pub fn set_status(&mut self, msg: &str, status: &str) {
-        self.status_message = Some((msg.to_string(), status.to_string()));
+#[derive(PartialEq)]
+pub enum StatusLine {
+    Empty,
+    Loading,
+    // severity: "error" | "info"
+    Text { content: String, severity: String },
+}
+
+impl StatusLine {
+    pub fn is_empty(&self) -> bool {
+        *self == Self::Empty
     }
 
-    pub fn clear_status(&mut self) {
-        self.status_message = None;
+    pub fn is_loading(&self) -> bool {
+        *self == Self::Loading
     }
 
-    pub fn get_status(&mut self) -> Option<&str> {
-        self.status_message.as_ref().map(|(msg, _)| msg.as_str())
+    pub fn set(&mut self, msg: &str, severity: &str) {
+        *self = StatusLine::Text {
+            content: msg.to_string(),
+            severity: severity.to_string(),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        *self = StatusLine::Empty;
     }
 }
 
@@ -38,7 +53,7 @@ impl Default for AppState {
             route: Route::Notifications,
             should_quit: false,
             is_loading: false,
-            status_message: None,
+            statusline: StatusLine::Empty,
             selected_notification_index: 0,
         }
     }
@@ -62,14 +77,13 @@ impl App {
     }
 
     pub fn on_tick(&mut self) -> std::result::Result<(), String> {
-        const LOADING_DISPLAY: &str = "Loading...";
-
-        if self.state.is_loading && self.state.status_message.is_none() {
-            self.state.set_status(LOADING_DISPLAY, "info");
+        // show loading text but do no overwrite a previous message
+        if self.state.is_loading && self.state.statusline.is_empty() {
+            self.state.statusline = StatusLine::Loading;
         }
 
-        if !self.state.is_loading && self.state.get_status() == Some(LOADING_DISPLAY) {
-            self.state.clear_status();
+        if !self.state.is_loading && self.state.statusline.is_loading() {
+            self.state.statusline.clear();
         }
 
         // Ensure cursor is always on a notification

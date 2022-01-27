@@ -65,7 +65,8 @@ async fn start_async_network_io(event_rx: Receiver<NotifEvent>, network: &mut Ne
             log::error!("Network error: {:?}", err.source().unwrap_or(&err));
             let mut app = network.app.lock().await;
             app.state
-                .set_status(&format!("Network error: {err}"), "error");
+                .statusline
+                .set(&format!("Network error: {err}"), "error");
         }
         let mut app = network.app.lock().await;
         app.state.is_loading = false;
@@ -101,7 +102,7 @@ async fn run_event_loop<B: Backend>(
     {
         let mut app = app.lock().await;
         if let Err(err) = app.dispatch_event(NotifEvent::Refresh) {
-            app.state.set_status(&err, "error");
+            app.state.statusline.set(&err, "error");
         }
     }
 
@@ -115,7 +116,7 @@ async fn run_event_loop<B: Backend>(
 
         if crossterm::event::poll(timeout)? {
             if let Event::Key(key) = crossterm::event::read()? {
-                app.state.clear_status();
+                app.state.statusline.clear();
 
                 let result = match key.code {
                     KeyCode::Char(c) => app.on_key(c),
@@ -123,14 +124,14 @@ async fn run_event_loop<B: Backend>(
                     _ => Ok(()),
                 };
                 if let Err(err) = result {
-                    app.state.set_status(&err, "error");
+                    app.state.statusline.set(&err, "error");
                 }
             }
         }
 
         if last_tick.elapsed() >= tick_rate {
             if let Err(err) = app.on_tick() {
-                app.state.set_status(&err, "error");
+                app.state.statusline.set(&err, "error");
             }
             last_tick = Instant::now();
         }

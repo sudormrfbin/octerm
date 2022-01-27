@@ -8,7 +8,7 @@ use tui::{
 };
 
 use crate::{
-    app::App,
+    app::{App, StatusLine},
     github::{GitHub, IssueState, Notification, NotificationTarget, PullRequestState},
 };
 
@@ -37,7 +37,7 @@ pub fn draw_ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         Route::Notifications => draw_notifications(f, app, route_area),
         Route::NotifTarget(_) => draw_notif_target(f, app, route_area),
     }
-    draw_status(f, app, status_area);
+    draw_statusline(f, app, status_area);
 }
 
 macro_rules! span {
@@ -120,17 +120,18 @@ fn draw_notif_target<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
     f.render_widget(para, area);
 }
 
-pub fn draw_status<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
-    let (msg, status) = match &app.state.status_message {
-        Some(s) => s,
-        None => return,
+pub fn draw_statusline<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
+    let (msg, severity) = match &app.state.statusline {
+        StatusLine::Empty => return,
+        StatusLine::Loading => ("Loading...", "info"),
+        StatusLine::Text { content, severity } => (content.as_str(), severity.as_str()),
     };
-    let msg_color = match status.as_str() {
+    let msg_color = match severity {
         "info" => Color::Blue,
         "error" => Color::Red,
-        _ => unreachable!(),
+        _ => unreachable!("'{severity}' is an invalid severity for statusline"),
     };
-    let paragraph = Paragraph::new(msg.as_str()).style(Style::default().fg(msg_color));
+    let paragraph = Paragraph::new(msg).style(Style::default().fg(msg_color));
     f.render_widget(paragraph, area);
 }
 
