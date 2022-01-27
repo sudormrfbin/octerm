@@ -33,7 +33,7 @@ use crate::network::Network;
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
-    let tick_rate = Duration::from_millis(250);
+    let tick_rate = Duration::from_millis(100);
     let token = std::env::var("GITHUB_TOKEN").map_err(|_| Error::Authentication)?;
 
     // This initialises a statically counted instance, which is handy

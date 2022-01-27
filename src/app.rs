@@ -14,7 +14,27 @@ pub struct AppState {
     pub should_quit: bool,
     pub is_loading: bool,
     pub statusline: StatusLine,
+    pub spinner: Spinner,
     pub selected_notification_index: usize,
+}
+
+pub struct Spinner {
+    frames: Vec<&'static str>,
+    idx: usize,
+}
+
+impl Spinner {
+    pub fn new() -> Self {
+        Self {
+            frames: vec!["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"],
+            idx: 0
+        }
+    }
+
+    pub fn next(&mut self) -> &str {
+        self.idx = (self.idx + 1) % self.frames.len();
+        self.frames[self.idx]
+    }
 }
 
 #[derive(PartialEq)]
@@ -54,6 +74,7 @@ impl Default for AppState {
             should_quit: false,
             is_loading: false,
             statusline: StatusLine::Empty,
+            spinner: Spinner::new(),
             selected_notification_index: 0,
         }
     }

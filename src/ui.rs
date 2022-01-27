@@ -123,10 +123,13 @@ fn draw_notif_target<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
 pub fn draw_statusline<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
     let (msg, severity) = match &app.state.statusline {
         StatusLine::Empty => return,
-        StatusLine::Loading => ("Loading...", "info"),
-        StatusLine::Text { content, severity } => (content.as_str(), severity.as_str()),
+        StatusLine::Loading => (
+            format!("{} Loading", app.state.spinner.next()),
+            "info".to_string(),
+        ),
+        StatusLine::Text { content, severity } => (content.clone(), severity.clone()),
     };
-    let msg_color = match severity {
+    let msg_color = match severity.as_str() {
         "info" => Color::Blue,
         "error" => Color::Red,
         _ => unreachable!("'{severity}' is an invalid severity for statusline"),
