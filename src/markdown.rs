@@ -22,6 +22,7 @@ pub fn parse<'a>(source: &'a str) -> Text {
         .add_modifier(Modifier::BOLD)
         .fg(Color::White);
     let heading_style = Style::default().add_modifier(Modifier::UNDERLINED);
+    let html_style = Style::default().add_modifier(Modifier::DIM);
 
     let get_heading_style = |level| match level as usize {
         1 => heading1_style,
@@ -94,7 +95,12 @@ pub fn parse<'a>(source: &'a str) -> Text {
                 }
             }
             Event::Code(text) => spans.push(Span::styled(text, code_style)),
-            Event::Html(text) => spans.push(Span::raw(text)),
+            Event::Html(text) => {
+                for line in text.lines() {
+                    let span = Span::styled(line.to_string(), html_style);
+                    lines.push(Spans::from(span));
+                }
+            }
             Event::SoftBreak | Event::HardBreak => {
                 // TODO: reflow instead ? i.e. push a " " to spans
                 let spans = std::mem::take(&mut spans);
