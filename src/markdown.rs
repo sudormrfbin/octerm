@@ -17,6 +17,16 @@ pub fn parse<'a>(source: &'a str) -> Text {
         .fg(Color::Magenta);
     let code_style = Style::default().add_modifier(Modifier::REVERSED);
     let block_code_style = Style::default().bg(Color::Rgb(62, 68, 82));
+    let heading1_style = Style::default()
+        .add_modifier(Modifier::UNDERLINED)
+        .add_modifier(Modifier::BOLD)
+        .fg(Color::White);
+    let heading_style = Style::default().add_modifier(Modifier::UNDERLINED);
+
+    let get_heading_style = |level| match level as usize {
+        1 => heading1_style,
+        _ => heading_style
+    };
 
     let parser = pulldown_cmark::Parser::new(source);
 
@@ -28,6 +38,12 @@ pub fn parse<'a>(source: &'a str) -> Text {
                     Tag::Item => {
                         // list item
                         spans.push(Span::raw("• "))
+                    }
+                    Tag::Heading(level, _, _) => {
+                        let mut header = "#".repeat(level as usize);
+                        header.push(' ');
+                        let style = get_heading_style(level);
+                        spans.push(Span::styled(header, style))
                     }
                     _ => (),
                 }
@@ -58,6 +74,10 @@ pub fn parse<'a>(source: &'a str) -> Text {
                 match tag {
                     Some(Tag::Strong) => spans.push(Span::styled(text, bold_style)),
                     Some(Tag::Emphasis) => spans.push(Span::styled(text, italic_style)),
+                    Some(Tag::Heading(level, _, _)) => {
+                        let style = get_heading_style(*level);
+                        spans.push(Span::styled(text, style))
+                    }
                     Some(Tag::CodeBlock(_)) => {
                         // line breaks in codeblocks are not reported as events
                         // BUG: In codeblocks, pulldown_cmark does not report line ending events
@@ -79,6 +99,10 @@ pub fn parse<'a>(source: &'a str) -> Text {
                 // TODO: reflow instead ? i.e. push a " " to spans
                 let spans = std::mem::take(&mut spans);
                 lines.push(Spans::from(spans));
+            }
+            Event::Rule => {
+                lines.push(Spans::from("━━━━━━━━━━━━"));
+                lines.push(Spans::default());
             }
             _ => {
                 log::warn!("unhandled markdown event {:?}", event);
