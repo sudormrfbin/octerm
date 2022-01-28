@@ -60,15 +60,15 @@ pub fn parse<'a>(source: &'a str) -> Text {
                     Some(Tag::Emphasis) => spans.push(Span::styled(text, italic_style)),
                     Some(Tag::CodeBlock(_)) => {
                         // line breaks in codeblocks are not reported as events
-                            // BUG: In codeblocks, pulldown_cmark does not report line ending events
-                            // (HardBreak) and everything inside the block is send as one Text
-                            // event. This seems to be the desired behavior, but crlf line
-                            // endings cause the text to be broken up as separate Text events
-                            // on each newline, but they also have a `\n` at the beginning of
-                            // every line. Github uses crlf, so this ends up being a problem for us.
-                            let text = text.trim_start_matches('\n');
-                            let span = Span::styled(text.to_string(), block_code_style);
-                            lines.push(Spans::from(span));
+                        // BUG: In codeblocks, pulldown_cmark does not report line ending events
+                        // (HardBreak) and everything inside the block is send as one Text
+                        // event. This seems to be the desired behavior, but crlf line
+                        // endings cause the text to be broken up as separate Text events
+                        // on each newline, but they also have a `\n` at the beginning of
+                        // every line. Github uses crlf, so this ends up being a problem for us.
+                        let text = text.trim_start_matches('\n');
+                        let span = Span::styled(text.to_string(), block_code_style);
+                        lines.push(Spans::from(span));
                     }
                     Some(_) | None => spans.push(Span::raw(text)),
                 }
