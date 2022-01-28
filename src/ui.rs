@@ -10,6 +10,7 @@ use tui::{
 use crate::{
     app::{App, StatusLine},
     github::{GitHub, IssueState, Notification, NotificationTarget, PullRequestState},
+    markdown,
 };
 
 #[derive(PartialEq)]
@@ -102,13 +103,13 @@ fn draw_notif_target<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
         NotificationTarget::Unknown => "This is an unknown item".into(),
     };
 
-    let body: tui::text::Text = match notif.target {
+    let body = match notif.target {
         NotificationTarget::Issue(ref issue) => issue.body.as_str(),
         NotificationTarget::PullRequest(ref pr) => pr.body.as_str(),
         NotificationTarget::Release(ref release) => release.body.as_str(),
         _ => "No description provided.",
-    }
-    .into();
+    };
+    let body = markdown::parse(body);
 
     let mut content = Text::from(title);
     content.extend(Text::raw("\n"));

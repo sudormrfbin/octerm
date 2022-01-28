@@ -3,6 +3,7 @@ mod app;
 mod error;
 mod events;
 mod github;
+mod markdown;
 mod network;
 mod ui;
 
