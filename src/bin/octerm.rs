@@ -1,12 +1,3 @@
-mod actions;
-mod app;
-mod error;
-mod events;
-mod github;
-mod markdown;
-mod network;
-mod ui;
-
 use std::{
     error::Error as StdError,
     sync::{mpsc::Receiver, Arc},
@@ -26,10 +17,10 @@ use tui::{
     Terminal,
 };
 
-use crate::app::App;
-use crate::error::{Error, Result};
-use crate::events::NotifEvent;
-use crate::network::Network;
+use octerm::app::App;
+use octerm::error::{Error, Result};
+use octerm::events::NotifEvent;
+use octerm::network::Network;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -109,7 +100,7 @@ async fn run_event_loop<B: Backend>(
 
     loop {
         let mut app = app.lock().await;
-        terminal.draw(|f| ui::draw_ui(f, &mut app))?;
+        terminal.draw(|f| octerm::ui::draw_ui(f, &mut app))?;
 
         let timeout = tick_rate
             .checked_sub(last_tick.elapsed())
