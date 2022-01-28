@@ -17,7 +17,11 @@ use tui::{
 use octerm::markdown;
 
 const HELP_TEXT: &str = r#"
-Usage: mdrender [-f FILE]
+Usage: mdrender [OPTIONS]
+
+    -f FILE         Take markdown input from FILE. Must come before -e
+    -e, --events    Print pulldown-cmark events and exit
+    -h, --help      Display help
 
 Renders the markdown given in a file (by default render.md in the CWD)
 to the terminal, using octerm's markdown rendering locgic. Useful for
@@ -25,6 +29,14 @@ quick testing.
 
 Press "q" to quit the screen and "r" to reload from the file.
 "#;
+
+fn print_events(text: &str) {
+    let parser = pulldown_cmark::Parser::new(text).into_offset_iter();
+    for (event, range) in parser {
+        println!("{:<3?}: {:?}", range, event);
+    }
+    println!("EOF");
+}
 
 const DEFAULT_MD_FILE: &str = "render.md";
 
@@ -53,11 +65,26 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut md_file = DEFAULT_MD_FILE.to_string();
 
     let mut args = std::env::args();
-    match args.nth(1).as_deref() {
-        Some("-h") | Some("--help") => print!("{HELP_TEXT}"),
-        Some("-f") => md_file = args.next().expect("-f requires a file path"),
-        _ => ()
+    args.next(); // skip program name
+
+    while let Some(arg) = args.next() {
+        match arg.as_ref() {
+            "-f" => md_file = args.next().expect("-f requires a file path"),
+            "-e" | "--events" => {
+                print_events(&std::fs::read_to_string(&md_file).unwrap());
+                return Ok(());
+            }
+            "-h" | "--help" => {
+                print!("{HELP_TEXT}");
+                return Ok(());
+            }
+            _ => {
+                eprintln!("Invalid argument {arg}");
+                return Ok(());
+            },
+        }
     }
+
     // setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -118,4 +145,3 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
 
     f.render_widget(para, f.size());
 }
-
