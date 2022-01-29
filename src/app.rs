@@ -16,6 +16,8 @@ pub struct AppState {
     pub statusline: StatusLine,
     pub spinner: Spinner,
     pub selected_notification_index: usize,
+    /// Scroll offset for content in notification target page
+    pub target_scroll: u16,
 }
 
 pub struct Spinner {
@@ -76,6 +78,7 @@ impl Default for AppState {
             statusline: StatusLine::Empty,
             spinner: Spinner::new(),
             selected_notification_index: 0,
+            target_scroll: 0,
         }
     }
 }
@@ -133,8 +136,8 @@ impl App {
             'R' => actions::refresh(self),
             'g' => actions::goto_begin(self),
             'G' => actions::goto_end(self),
-            'j' => actions::next_item(self),
-            'k' => actions::previous_item(self),
+            'j' => actions::scroll_down(self),
+            'k' => actions::scroll_up(self),
             _ => Ok(()),
         }
     }

@@ -5,6 +5,7 @@ use crate::{app::App, events::NotifEvent, ui::Route};
 pub fn quit(app: &mut App) -> Result<(), String> {
     if app.state.route != Route::Notifications {
         app.state.route = Route::Notifications;
+        app.state.target_scroll = 0;
     } else {
         app.state.should_quit = true;
     }
@@ -56,7 +57,11 @@ pub fn refresh(app: &mut App) -> Result<(), String> {
 }
 
 pub fn goto_begin(app: &mut App) -> Result<(), String> {
-    app.state.selected_notification_index = 0;
+    match app.state.route {
+        Route::Notifications => app.state.selected_notification_index = 0,
+        Route::NotifTarget(_) => app.state.target_scroll = 0,
+    }
+
     Ok(())
 }
 
@@ -65,16 +70,31 @@ pub fn goto_end(app: &mut App) -> Result<(), String> {
     Ok(())
 }
 
-pub fn next_item(app: &mut App) -> Result<(), String> {
-    app.state.selected_notification_index = app
-        .state
-        .selected_notification_index
-        .add(1)
-        .min(app.github.notif.len().saturating_sub(1));
+pub fn scroll_down(app: &mut App) -> Result<(), String> {
+    match app.state.route {
+        Route::Notifications => {
+            app.state.selected_notification_index = app
+                .state
+                .selected_notification_index
+                .add(1)
+                .min(app.github.notif.len().saturating_sub(1))
+        }
+        Route::NotifTarget(_) => {
+            app.state.target_scroll = app.state.target_scroll.saturating_add(1)
+        }
+    }
     Ok(())
 }
 
-pub fn previous_item(app: &mut App) -> Result<(), String> {
-    app.state.selected_notification_index = app.state.selected_notification_index.saturating_sub(1);
+pub fn scroll_up(app: &mut App) -> Result<(), String> {
+    match app.state.route {
+        Route::Notifications => {
+            app.state.selected_notification_index =
+                app.state.selected_notification_index.saturating_sub(1)
+        }
+        Route::NotifTarget(_) => {
+            app.state.target_scroll = app.state.target_scroll.saturating_sub(1)
+        }
+    }
     Ok(())
 }

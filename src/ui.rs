@@ -120,6 +120,7 @@ fn draw_notif_target<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
 
     let para = Paragraph::new(content)
         .block(Block::default().borders(Borders::ALL))
+        .scroll((app.state.target_scroll, 0))
         .wrap(tui::widgets::Wrap { trim: false });
     f.render_widget(para, area);
 }
