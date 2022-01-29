@@ -69,6 +69,7 @@ fn draw_notif_target<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
     let target_color = notif_target_color(&notif.target);
     let icon_style = Style::default().fg(target_color);
     let target_style = Style::default().bg(target_color).fg(Color::Black);
+    let author_style = Style::default().add_modifier(Modifier::ITALIC);
     let title = match notif.target {
         NotificationTarget::Issue(ref issue) => Spans::from(
             [
@@ -77,6 +78,7 @@ fn draw_notif_target<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
                 span!(issue.title.as_str()),
                 span!(format!(" #{} ", issue.unique), fg: DarkGray,),
                 span!(issue.state.to_string(), target_style),
+                span!(format!(" @{}", issue.author), author_style),
             ]
             .to_vec(),
         ),
@@ -87,6 +89,7 @@ fn draw_notif_target<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
                 span!(pr.title.as_str()),
                 span!(format!(" #{} ", pr.unique), fg: DarkGray,),
                 span!(pr.state.to_string(), target_style),
+                span!(format!(" @{}", pr.author), author_style),
             ]
             .to_vec(),
         ),

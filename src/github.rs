@@ -43,6 +43,7 @@ pub struct Issue {
     pub title: String,
     pub body: String,
     pub unique: String,
+    pub author: String,
     pub state: IssueState,
 }
 
@@ -68,6 +69,7 @@ impl From<octocrab::models::issues::Issue> for Issue {
                 .clone()
                 .unwrap_or("No description provided.".to_string()),
             unique: issue.number.to_string(),
+            author: issue.user.login.clone(),
             inner: issue,
             state,
         }
@@ -82,10 +84,14 @@ pub enum IssueState {
 
 impl Display for IssueState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match *self {
-            Self::Open => "Open",
-            Self::Closed => "Closed",
-        })
+        write!(
+            f,
+            "{}",
+            match *self {
+                Self::Open => "Open",
+                Self::Closed => "Closed",
+            }
+        )
     }
 }
 
@@ -95,6 +101,7 @@ pub struct PullRequest {
     pub title: String,
     pub body: String,
     pub unique: String,
+    pub author: String,
     pub state: PullRequestState,
 }
 
@@ -124,6 +131,7 @@ impl From<octocrab::models::pulls::PullRequest> for PullRequest {
                 .clone()
                 .unwrap_or("No description provided.".to_string()),
             unique: pr.number.to_string(),
+            author: pr.user.clone().map(|u| u.login.clone()).unwrap_or_default(),
             state,
             inner: pr,
         }
@@ -139,11 +147,15 @@ pub enum PullRequestState {
 
 impl Display for PullRequestState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match *self {
-            Self::Open => "Open",
-            Self::Closed => "Closed",
-            Self::Merged => "Merged",
-        })
+        write!(
+            f,
+            "{}",
+            match *self {
+                Self::Open => "Open",
+                Self::Closed => "Closed",
+                Self::Merged => "Merged",
+            }
+        )
     }
 }
 
