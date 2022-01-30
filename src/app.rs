@@ -29,7 +29,7 @@ impl Spinner {
     pub fn new() -> Self {
         Self {
             frames: vec!["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"],
-            idx: 0
+            idx: 0,
         }
     }
 

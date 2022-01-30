@@ -81,7 +81,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             _ => {
                 eprintln!("Invalid argument {arg}");
                 return Ok(());
-            },
+            }
         }
     }
 

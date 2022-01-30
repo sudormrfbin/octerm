@@ -26,7 +26,7 @@ pub fn parse<'a>(source: &'a str) -> Text {
 
     let get_heading_style = |level| match level as usize {
         1 => heading1_style,
-        _ => heading_style
+        _ => heading_style,
     };
 
     let parser = pulldown_cmark::Parser::new(source);
