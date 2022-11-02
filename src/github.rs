@@ -14,6 +14,44 @@ impl PartialEq for Notification {
     }
 }
 
+impl Notification {
+    /// A sorting function that assigns ranks to a notification based on how
+    /// relavant/irrelavant it is. A higher score means it can be marked as
+    /// read quicker/needs less attention than a notification with a lower score.
+    /// Update time of a notification is used as a tie breaker, and older
+    /// notifications show up first in each rank set.
+    pub fn sorter(&self) -> impl Ord {
+        let irrelavance = match self.target {
+            NotificationTarget::Release(_) => 100,
+            NotificationTarget::PullRequest(PullRequest {
+                state: PullRequestState::Merged,
+                ..
+            }) => 90,
+            NotificationTarget::PullRequest(PullRequest {
+                state: PullRequestState::Closed,
+                ..
+            }) => 80,
+            NotificationTarget::Issue(Issue {
+                state: IssueState::Closed,
+                ..
+            }) => 70,
+            NotificationTarget::Discussion => 60,
+            NotificationTarget::Issue(Issue {
+                state: IssueState::Open,
+                ..
+            }) => 50,
+            NotificationTarget::PullRequest(PullRequest {
+                state: PullRequestState::Open,
+                ..
+            }) => 40,
+            NotificationTarget::CiBuild => 30,
+            NotificationTarget::Unknown => 0,
+        };
+
+        (irrelavance, std::cmp::Reverse(self.inner.updated_at))
+    }
+}
+
 #[derive(Clone)]
 pub enum NotificationTarget {
     Issue(Issue),
@@ -76,7 +114,7 @@ impl From<octocrab::models::issues::Issue> for Issue {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum IssueState {
     Open,
     Closed,
@@ -138,7 +176,7 @@ impl From<octocrab::models::pulls::PullRequest> for PullRequest {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum PullRequestState {
     Open,
     Closed,
