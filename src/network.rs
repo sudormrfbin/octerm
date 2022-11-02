@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-use octocrab::Octocrab;
+use octocrab::{models::activity::Notification as OctoNotification, Octocrab, Page};
 use tokio::task::JoinHandle;
 
 use crate::app::App;
@@ -29,19 +29,54 @@ impl Network {
         }
     }
 
-    pub async fn refresh(&self) -> Result<()> {
-        let notifs = self
+    async fn get_all_notifs(&self) -> Result<Vec<OctoNotification>> {
+        let mut notifs = self
             .octocrab
             .activity()
             .notifications()
             .list()
             .send()
             .await?;
+        let pages = match notifs.number_of_pages().filter(|p| *p > 1) {
+            None => return Ok(notifs.take_items()),
+            Some(p) => p,
+        };
 
-        let mut tasks: Vec<JoinHandle<Result<Notification>>> = Vec::new();
-        for notif in notifs.into_iter() {
-            tasks.push(tokio::spawn(Notification::from_octocrab(notif)));
+        let mut tasks: Vec<JoinHandle<Result<Page<OctoNotification>>>> =
+            Vec::with_capacity(pages as usize - 1);
+        for i in 2..=pages {
+            tasks.push(tokio::spawn(async move {
+                Ok(octocrab::instance()
+                    .activity()
+                    .notifications()
+                    .list()
+                    .page(i as u8)
+                    .send()
+                    .await?)
+            }));
         }
+
+        let result: Vec<StdResult<Result<Page<OctoNotification>>, tokio::task::JoinError>> =
+            futures::future::join_all(tasks).await;
+
+        let mut acc = notifs.take_items();
+        acc.reserve_exact(50 * result.len()); // Max notifications from each request is 50
+
+        let result = result.into_iter().try_fold(acc, |mut acc, task| {
+            let notif = task.map_err(|_| Error::NetworkTask)?;
+            acc.extend_from_slice(&notif?.take_items());
+            Ok::<Vec<OctoNotification>, Error>(acc)
+        })?;
+        Ok(result)
+    }
+
+    pub async fn refresh(&self) -> Result<()> {
+        let notifs = self.get_all_notifs().await?;
+        let tasks: Vec<JoinHandle<Result<Notification>>> = notifs
+            .into_iter()
+            .map(|n| tokio::spawn(Notification::from_octocrab(n)))
+            .collect();
+
         // TODO: Buffer the requests
         let result: Vec<StdResult<Result<Notification>, tokio::task::JoinError>> =
             futures::future::join_all(tasks).await;
@@ -52,7 +87,7 @@ impl Network {
             Ok::<Vec<Notification>, Error>(acc)
         })?;
         result.sort_unstable_by_key(Notification::sorter);
-        result.reverse(); // Most recent on top
+        result.reverse();
 
         let mut app = self.app.lock().await;
         app.github.notif.cache = Some(result);
