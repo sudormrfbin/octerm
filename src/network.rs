@@ -9,7 +9,7 @@ use tokio::task::JoinHandle;
 use crate::app::App;
 use crate::error::{Error, Result};
 use crate::events::NotifEvent;
-use crate::github::{Notification, NotificationTarget};
+use crate::github::Notification;
 
 pub struct Network {
     octocrab: Octocrab,
@@ -40,7 +40,7 @@ impl Network {
 
         let mut tasks: Vec<JoinHandle<Result<Notification>>> = Vec::new();
         for notif in notifs.into_iter() {
-            tasks.push(tokio::spawn(fetch_additional_notif_info(notif)));
+            tasks.push(tokio::spawn(Notification::from_octocrab(notif)));
         }
         // TODO: Buffer the requests
         let result: Vec<StdResult<Result<Notification>, tokio::task::JoinError>> =
@@ -125,48 +125,4 @@ impl Network {
         }
         Ok(())
     }
-}
-
-async fn fetch_additional_notif_info(
-    notif: octocrab::models::activity::Notification,
-) -> Result<Notification> {
-    let url = match notif.subject.url.as_ref() {
-        Some(url) => url,
-        None => {
-            return Ok(Notification {
-                target: match notif.subject.type_.as_str() {
-                    "Discussion" => NotificationTarget::Discussion,
-                    "CheckSuite" => NotificationTarget::CiBuild,
-                    // Issues and PRs usually have a subject url,
-                    // so this is somewhat an edge case.
-                    _ => NotificationTarget::Unknown,
-                },
-                inner: notif,
-            });
-        }
-    };
-    let target = match notif.subject.type_.as_str() {
-        "Issue" => {
-            let issue: octocrab::models::issues::Issue =
-                octocrab::instance().get(url, None::<&()>).await?;
-            NotificationTarget::Issue(issue.into())
-        }
-        "PullRequest" => {
-            let pr: octocrab::models::pulls::PullRequest =
-                octocrab::instance().get(url, None::<&()>).await?;
-            NotificationTarget::PullRequest(pr.into())
-        }
-        "Release" => {
-            let release: octocrab::models::repos::Release =
-                octocrab::instance().get(url, None::<&()>).await?;
-            NotificationTarget::Release(release.into())
-        }
-        "Discussion" => NotificationTarget::Discussion,
-        "CheckSuite" => NotificationTarget::CiBuild,
-        _ => NotificationTarget::Unknown,
-    };
-    Ok(Notification {
-        inner: notif,
-        target,
-    })
 }

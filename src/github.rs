@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use crate::error::Result;
 use octocrab::models::Repository;
 
 #[derive(Clone)]
@@ -49,6 +50,50 @@ impl Notification {
         };
 
         (irrelavance, std::cmp::Reverse(self.inner.updated_at))
+    }
+
+    /// Fetch additional information about the notification from the octocrab
+    /// Notification model and construct a [`Notification`].
+    pub async fn from_octocrab(notif: octocrab::models::activity::Notification) -> Result<Self> {
+        let url = match notif.subject.url.as_ref() {
+            Some(url) => url,
+            None => {
+                return Ok(Notification {
+                    target: match notif.subject.type_.as_str() {
+                        "Discussion" => NotificationTarget::Discussion,
+                        "CheckSuite" => NotificationTarget::CiBuild,
+                        // Issues and PRs usually have a subject url,
+                        // so this is somewhat an edge case.
+                        _ => NotificationTarget::Unknown,
+                    },
+                    inner: notif,
+                });
+            }
+        };
+        let target = match notif.subject.type_.as_str() {
+            "Issue" => {
+                let issue: octocrab::models::issues::Issue =
+                    octocrab::instance().get(url, None::<&()>).await?;
+                NotificationTarget::Issue(issue.into())
+            }
+            "PullRequest" => {
+                let pr: octocrab::models::pulls::PullRequest =
+                    octocrab::instance().get(url, None::<&()>).await?;
+                NotificationTarget::PullRequest(pr.into())
+            }
+            "Release" => {
+                let release: octocrab::models::repos::Release =
+                    octocrab::instance().get(url, None::<&()>).await?;
+                NotificationTarget::Release(release.into())
+            }
+            "Discussion" => NotificationTarget::Discussion,
+            "CheckSuite" => NotificationTarget::CiBuild,
+            _ => NotificationTarget::Unknown,
+        };
+        Ok(Notification {
+            inner: notif,
+            target,
+        })
     }
 }
 
