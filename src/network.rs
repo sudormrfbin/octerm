@@ -42,6 +42,8 @@ impl Network {
             Some(p) => p,
         };
 
+        // TODO: Use Vec::with_capacity more
+        // Spawn Notification::from_octocrab(n) inside each page task (halves waiting time)
         let mut tasks: Vec<JoinHandle<Result<Page<OctoNotification>>>> =
             Vec::with_capacity(pages as usize - 1);
         for i in 2..=pages {
@@ -103,7 +105,7 @@ impl Network {
             .ok_or(Error::HtmlUrlNotFound {
                 api_url: notif.inner.url.to_string(),
             });
-        let url = match notif.inner.subject.type_.as_str() {
+        let url = match notif.inner.subject.r#type.as_str() {
             "Release" => {
                 let release: octocrab::models::repos::Release =
                     self.octocrab.get(default_url?, None::<&()>).await?;

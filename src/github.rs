@@ -59,7 +59,7 @@ impl Notification {
             Some(url) => url,
             None => {
                 return Ok(Notification {
-                    target: match notif.subject.type_.as_str() {
+                    target: match notif.subject.r#type.as_str() {
                         "Discussion" => NotificationTarget::Discussion,
                         "CheckSuite" => NotificationTarget::CiBuild,
                         // Issues and PRs usually have a subject url,
@@ -70,7 +70,7 @@ impl Notification {
                 });
             }
         };
-        let target = match notif.subject.type_.as_str() {
+        let target = match notif.subject.r#type.as_str() {
             "Issue" => {
                 let issue: octocrab::models::issues::Issue =
                     octocrab::instance().get(url, None::<&()>).await?;
