@@ -24,6 +24,6 @@ impl From<octocrab::Error> for Error {
                 return Self::GitHubRateLimitExceeded(e);
             }
         }
-        return Self::GitHub(e);
+        Self::GitHub(e)
     }
 }

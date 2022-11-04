@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
 use crate::error::Result;
-use octocrab::models::Repository;
 
 #[derive(Clone)]
 pub struct Notification {
@@ -150,7 +149,7 @@ impl From<octocrab::models::issues::Issue> for Issue {
             body: issue
                 .body
                 .clone()
-                .unwrap_or("No description provided.".to_string()),
+                .unwrap_or_else(|| "No description provided.".to_string()),
             unique: issue.number.to_string(),
             author: issue.user.login.clone(),
             inner: issue,
@@ -212,7 +211,7 @@ impl From<octocrab::models::pulls::PullRequest> for PullRequest {
             body: pr
                 .body
                 .clone()
-                .unwrap_or("No description provided.".to_string()),
+                .unwrap_or_else(|| "No description provided.".to_string()),
             unique: pr.number.to_string(),
             author: pr.user.clone().map(|u| u.login.clone()).unwrap_or_default(),
             state,
@@ -252,7 +251,7 @@ pub struct Release {
 
 impl Release {
     pub fn icon(&self) -> &'static str {
-        return "";
+        ""
     }
 }
 
@@ -267,58 +266,9 @@ impl From<octocrab::models::repos::Release> for Release {
             body: release
                 .body
                 .clone()
-                .unwrap_or("No description provided.".to_string()),
+                .unwrap_or_else(|| "No description provided.".to_string()),
             unique: release.tag_name.clone(),
             inner: release,
         }
-    }
-}
-
-pub struct GitHub {
-    pub notif: NotificationStore,
-}
-
-impl GitHub {
-    pub fn new() -> Self {
-        Self {
-            notif: NotificationStore::new(),
-        }
-    }
-
-    /// Constructs a "repo_author/repo_name" string normally seen on GitHub.
-    pub fn repo_name(repo: &Repository) -> String {
-        let name = repo.name.as_str();
-        let author = repo
-            .owner
-            .as_ref()
-            .map(|o| o.login.clone())
-            .unwrap_or_default();
-        format!("{author}/{name}")
-    }
-}
-
-pub struct NotificationStore {
-    pub cache: Option<Vec<Notification>>,
-}
-
-impl NotificationStore {
-    pub fn new() -> Self {
-        Self { cache: None }
-    }
-
-    /// Get the nth notification in the cache.
-    pub fn nth(&self, idx: usize) -> Option<&Notification> {
-        self.cache.as_ref()?.get(idx)
-    }
-
-    /// Number of notifications in the cache.
-    pub fn len(&self) -> usize {
-        self.cache.as_ref().map(|v| v.len()).unwrap_or(0)
-    }
-
-    /// Get all unread notifications. Results are retrieved from a cache if
-    /// possible. Call [`Self::refresh()`] to refresh the cache.
-    pub fn unread(&mut self) -> Option<&[Notification]> {
-        return self.cache.as_ref().map(|v| v.as_slice());
     }
 }

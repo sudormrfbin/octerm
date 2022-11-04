@@ -5,7 +5,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let token = std::env::var("GITHUB_TOKEN").map_err(|_| Error::Authentication)?;
 
     // Initialise a statically counted instance
-    let builder = octocrab::Octocrab::builder().personal_token(token.clone());
+    let builder = octocrab::Octocrab::builder().personal_token(token);
     octocrab::initialise(builder)?;
 
     let (server_channel, app_channel) = meow::server::channels::<ServerRequest, ServerResponse>();
