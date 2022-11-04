@@ -11,10 +11,10 @@ pub enum Error {
     GitHub(#[source] octocrab::Error),
     #[error("github api rate limit exceeded")]
     GitHubRateLimitExceeded(#[source] octocrab::Error),
-    #[error("rendering error")]
-    CrossTerm(#[from] crossterm::ErrorKind),
     #[error("could not complete concurrent network requests")]
     NetworkTask,
+    #[error("could not open browser")]
+    BrowserNotAvailable,
 }
 
 impl From<octocrab::Error> for Error {

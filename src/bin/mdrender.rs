@@ -1,3 +1,4 @@
+/*
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event as CSEvent, KeyCode},
     execute,
@@ -145,3 +146,6 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
 
     f.render_widget(para, f.size());
 }
+*/
+
+fn main() {}

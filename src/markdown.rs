@@ -1,3 +1,4 @@
+/*
 use pulldown_cmark::{Event, Tag};
 use tui::{
     style::{Color, Modifier, Style},
@@ -118,3 +119,4 @@ pub fn parse<'a>(source: &'a str) -> Text {
 
     Text::from(lines)
 }
+*/
