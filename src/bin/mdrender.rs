@@ -1,21 +1,17 @@
-/*
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event as CSEvent, KeyCode},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use std::{
-    error::Error,
-    io,
-    time::{Duration, Instant},
-};
-use tui::{
-    backend::{Backend, CrosstermBackend},
-    widgets::Paragraph,
-    Frame, Terminal,
-};
+use std::{error::Error, path::PathBuf};
 
-use octerm::markdown;
+use meow::{
+    components::{
+        blank::BlankLine,
+        scroll::{Scroll, ScrollMsg},
+        text::Text, Component,
+    },
+    key,
+    layout::Constraint,
+    server::ServerChannel,
+    style::Stylize,
+    App, Cmd, FromResponse,
+};
 
 const HELP_TEXT: &str = r#"
 Usage: mdrender [OPTIONS]
@@ -41,24 +37,95 @@ fn print_events(text: &str) {
 
 const DEFAULT_MD_FILE: &str = "render.md";
 
-struct App {
-    text: String,
-    md_file: String,
+struct Model {
+    text: Scroll<Text<'static>>,
+    md_file: Option<PathBuf>,
 }
 
-impl App {
-    fn new(md_file: String) -> App {
-        let mut app = App {
-            md_file,
-            text: String::new(),
-        };
-        app.reload_text();
-        app
+impl Default for Model {
+    fn default() -> Self {
+        Self {
+            text: Scroll::new(Text::default()),
+            md_file: None,
+        }
+    }
+}
+
+impl Model {
+    pub fn set(&mut self, file: PathBuf, text: String) {
+        self.text = Scroll::new(octerm::markdown::parse(&text).cloned());
+        self.md_file = Some(file);
+    }
+}
+
+enum Msg {
+    Quit,
+    ReloadCurrentFile,
+
+    ScrollMsg(ScrollMsg),
+
+    Response(Response),
+}
+
+impl FromResponse<Response> for Msg {
+    fn from_response(response: Response) -> Self {
+        Msg::Response(response)
+    }
+}
+
+enum Request {
+    LoadFile(PathBuf),
+}
+
+enum Response {
+    LoadedFile(PathBuf, String),
+}
+
+struct MdRenderApp {}
+
+impl App for MdRenderApp {
+    type Msg = Msg;
+    type Model = Model;
+
+    type Request = Request;
+    type Response = Response;
+
+    fn init() -> Self::Model {
+        Model::default()
     }
 
-    fn reload_text(&mut self) {
-        let text = std::fs::read_to_string(&self.md_file).unwrap();
-        self.text = text;
+    fn event_to_msg(event: meow::AppEvent, model: &Self::Model) -> Option<Self::Msg> {
+        match event {
+            key!('q') => Some(Msg::Quit),
+            key!('r') => Some(Msg::ReloadCurrentFile),
+            _ => Some(Msg::ScrollMsg(model.text.event_to_msg(event)?)),
+        }
+    }
+
+    fn update(msg: Self::Msg, model: &mut Self::Model) -> meow::Cmd<Self::Request> {
+        match msg {
+            Msg::Quit => return Cmd::Quit,
+            Msg::Response(r) => match r {
+                Response::LoadedFile(path, content) => model.set(path, content),
+            },
+            Msg::ReloadCurrentFile => {
+                if let Some(ref file) = model.md_file {
+                    return Cmd::ServerRequest(Request::LoadFile(file.clone()));
+                }
+            }
+            Msg::ScrollMsg(m) => return model.text.update(m),
+        };
+        Cmd::None
+    }
+
+    fn view<'m>(model: &'m Self::Model) -> Box<dyn meow::components::Renderable + 'm> {
+        let column = meow::column![
+            &model.text,
+            BlankLine::SINGLE => Constraint::weak().gte().length(1),
+            model.md_file.as_ref().map(|f| f.to_string_lossy().into_owned().reverse(true)).unwrap_or_default() => Constraint::strong().eq().length(1),
+        ];
+
+        Box::new(column)
     }
 }
 
@@ -86,66 +153,24 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    // setup terminal
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+    let (server_channel, app_channel) = meow::server::channels::<Request, Response>();
+    std::thread::spawn(move || start_server(server_channel));
+    app_channel.send_to_server(Request::LoadFile(md_file.into()))?;
 
-    // create app and run it
-    let tick_rate = Duration::from_millis(250);
-    let app = App::new(md_file);
-    let res = run_app(&mut terminal, app, tick_rate);
-
-    // restore terminal
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
-    if let Err(err) = res {
-        println!("{:?}", err)
-    }
+    meow::run::<MdRenderApp>(Some(app_channel))?;
 
     Ok(())
 }
 
-fn run_app<B: Backend>(
-    terminal: &mut Terminal<B>,
-    mut app: App,
-    tick_rate: Duration,
-) -> io::Result<()> {
-    let mut last_tick = Instant::now();
-    loop {
-        terminal.draw(|f| ui(f, &app))?;
-
-        let timeout = tick_rate
-            .checked_sub(last_tick.elapsed())
-            .unwrap_or_else(|| Duration::from_secs(0));
-        if crossterm::event::poll(timeout)? {
-            if let CSEvent::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Char('r') => app.reload_text(),
-                    _ => (),
-                }
-            }
-        }
-        if last_tick.elapsed() >= tick_rate {
-            last_tick = Instant::now();
-        }
+fn start_server(channel: ServerChannel<Request, Response>) {
+    while let Ok(req) = channel.recv_from_app() {
+        match req {
+            Request::LoadFile(path) => channel
+                .send_to_app(Response::LoadedFile(
+                    path.clone(),
+                    std::fs::read_to_string(path).unwrap(),
+                ))
+                .unwrap(),
+        };
     }
 }
-
-fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
-    let para = Paragraph::new(markdown::parse(&app.text));
-
-    f.render_widget(para, f.size());
-}
-*/
-
-fn main() {}
