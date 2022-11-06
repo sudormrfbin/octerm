@@ -1,8 +1,8 @@
 use meow::{
     components::text::{Span, Spans, Text},
-    style::{Color, Style},
+    style::{Color, Style, Stylize},
 };
-use pulldown_cmark::{Event, Tag};
+use pulldown_cmark::{Event, Options, Tag};
 
 pub fn parse<'a>(source: &'a str) -> Text<'a> {
     let mut tags: Vec<Tag> = Vec::new();
@@ -25,7 +25,7 @@ pub fn parse<'a>(source: &'a str) -> Text<'a> {
         _ => heading_style.clone(),
     };
 
-    let parser = pulldown_cmark::Parser::new(source);
+    let parser = pulldown_cmark::Parser::new_ext(source, Options::ENABLE_STRIKETHROUGH);
 
     for event in parser {
         match event {
@@ -89,6 +89,7 @@ pub fn parse<'a>(source: &'a str) -> Text<'a> {
                         let span = Span::new(text.to_string()).style(block_code_style.clone());
                         lines.push(Spans::from(span));
                     }
+                    Some(Tag::Strikethrough) => spans.push(Span::new(text).strikethrough(true)),
                     Some(_) | None => spans.push(Span::new(text)),
                 }
             }
