@@ -5,7 +5,7 @@ pub mod network;
 pub mod util;
 
 use meow::{
-    components::{blank::BlankLine, Column, Component, List, ListMsg, Span},
+    components::{line::BlankLine, Component, Layout, List, ListMsg, Span},
     key,
     layout::Constraint,
     spans,
@@ -140,7 +140,7 @@ impl App for OctermApp {
     }
 
     fn view<'m>(model: &'m Self::Model) -> Box<dyn meow::components::Renderable + 'm> {
-        let mut column = Column::new();
+        let mut column = Layout::vertical();
         let mut status_line = spans![model
             .error
             .as_ref()
@@ -154,7 +154,7 @@ impl App for OctermApp {
 
         column
             .push(&model.notifs)
-            .push_constrained(BlankLine::SINGLE, Constraint::weak().gte().length(0))
+            .push_constrained(BlankLine::horizontal(), Constraint::weak().gte().length(0))
             .push_constrained(status_line, Constraint::strong().eq().length(1));
 
         Box::new(column)

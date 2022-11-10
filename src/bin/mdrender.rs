@@ -2,7 +2,7 @@ use std::{error::Error, path::PathBuf};
 
 use meow::{
     components::{
-        blank::BlankLine,
+        line::BlankLine,
         scroll::{Scroll, ScrollMsg},
         text::Text, Component,
     },
@@ -129,7 +129,7 @@ impl App for MdRenderApp {
     fn view<'m>(model: &'m Self::Model) -> Box<dyn meow::components::Renderable + 'm> {
         let column = meow::column![
             &model.text,
-            BlankLine::SINGLE => Constraint::weak().gte().length(1),
+            BlankLine::horizontal() => Constraint::weak().gte().length(1),
             model.md_file.as_ref().map(|f| f.to_string_lossy().into_owned().reverse(true)).unwrap_or_default() => Constraint::strong().eq().length(1),
         ];
 
