@@ -28,9 +28,17 @@ Press "q" to quit the screen and "r" to reload from the file.
 "#;
 
 fn print_events(text: &str) {
+    use pulldown_cmark::Event;
     let parser = pulldown_cmark::Parser::new(text).into_offset_iter();
+    let mut nesting = 1;
     for (event, range) in parser {
-        println!("{:<3?}: {:?}", range, event);
+        if let Event::End(_) = event {
+            nesting -= 2;
+        }
+        println!("{:<3?}:{:nesting$}{:?}", range, " ", event);
+        if let Event::Start(_) = event {
+            nesting += 2;
+        }
     }
     println!("EOF");
 }
