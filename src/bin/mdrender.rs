@@ -4,7 +4,7 @@ use meow::{
     components::{
         line::BlankLine,
         scroll::{Scroll, ScrollMsg},
-        text::Text, Component,
+        Component,
     },
     key,
     layout::Constraint,
@@ -12,6 +12,7 @@ use meow::{
     style::Stylize,
     App, Cmd, FromResponse,
 };
+use octerm::markdown::Markdown;
 
 const HELP_TEXT: &str = r#"
 Usage: mdrender [OPTIONS]
@@ -46,14 +47,14 @@ fn print_events(text: &str) {
 const DEFAULT_MD_FILE: &str = "render.md";
 
 struct Model {
-    text: Scroll<Text<'static>>,
+    text: Scroll<Markdown<'static>>,
     md_file: Option<PathBuf>,
 }
 
 impl Default for Model {
     fn default() -> Self {
         Self {
-            text: Scroll::new(Text::default()),
+            text: Scroll::new(Markdown::default()),
             md_file: None,
         }
     }
@@ -61,7 +62,7 @@ impl Default for Model {
 
 impl Model {
     pub fn set(&mut self, file: PathBuf, text: String) {
-        self.text = Scroll::new(octerm::markdown::parse(&text).cloned());
+        self.text = Scroll::new(Markdown::new(text.into()));
         self.md_file = Some(file);
     }
 }

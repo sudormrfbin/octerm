@@ -1,18 +1,77 @@
+use std::{
+    borrow::Cow,
+    ops::{ControlFlow, Deref},
+};
+
 use meow::{
-    components::text::{Span, Spans, Text},
+    components::{
+        line::{BlankLine, HorizontalRule, VerticalRule},
+        container::Container,
+        scroll::Scrollable,
+        text::{Span, Spans, Text},
+        Layout, Renderable,
+    },
     style::{Color, Style, Stylize},
 };
 use pulldown_cmark::{Event, Options, Tag};
 
-pub fn parse<'a>(source: &'a str) -> Text<'a> {
+pub struct Markdown<'t> {
+    components: Layout<'t>,
+}
+
+impl Default for Markdown<'static> {
+    fn default() -> Self {
+        Markdown {
+            components: Layout::vertical(),
+        }
+    }
+}
+
+impl<'t> Scrollable for Markdown<'t> {
+    fn scroll_up(&mut self) {
+        self.components.scroll_up();
+    }
+
+    fn scroll_down(&mut self) {
+        self.components.scroll_down();
+    }
+}
+
+impl<'t> Markdown<'t> {
+    pub fn new(source: Cow<'t, str>) -> Self {
+        let parser = pulldown_cmark::Parser::new_ext(&source, Options::ENABLE_STRIKETHROUGH);
+        Self {
+            // We set scrollable here unconditionally so that the Column
+            // doesn't try to layout all the components: resizing to fit,
+            // truncating them, etc. Also has the benifit of easily enabling
+            // scrolling by wrapping in a Scroll.
+            components: parse(&mut parser.into_iter(), None).scrollable(true),
+        }
+    }
+}
+
+impl<'t> Renderable for Markdown<'t> {
+    fn render(&self, surface: &mut meow::Surface) {
+        self.components.render(surface)
+    }
+
+    fn size(&self) -> (meow::components::Width, meow::components::Height) {
+        self.components.size()
+    }
+}
+
+pub fn parse<'a, I: Iterator<Item = Event<'a>>>(
+    events: &mut I,
+    mut transform: Option<Box<dyn FnMut(&Event<'a>) -> ControlFlow<(), Option<Event<'a>>>>>,
+) -> Layout<'static> {
     let mut tags: Vec<Tag> = Vec::new();
     let mut spans: Vec<Span> = Vec::new();
     let mut lines: Vec<Spans> = Vec::new();
+    let mut column = Layout::vertical();
 
     let bold_style = Style::default().bold(true).fg(Color::Purple);
     let italic_style = Style::default().italic(true).fg(Color::Magenta);
     let code_style = Style::default().reverse(true);
-    let block_code_style = Style::default().bg(Color::Yellow);
     let heading1_style = Style::default()
         .underline(meow::style::Underline::Single)
         .bold(true)
@@ -25,9 +84,18 @@ pub fn parse<'a>(source: &'a str) -> Text<'a> {
         _ => heading_style.clone(),
     };
 
-    let parser = pulldown_cmark::Parser::new_ext(source, Options::ENABLE_STRIKETHROUGH);
+    let flush_lines = |column: &mut Layout<'_>, lines: &mut Vec<Spans>| {
+        column.push(Text::new(std::mem::take(lines)).cloned());
+    };
 
-    for event in parser {
+    while let Some(mut event) = events.next() {
+        if let Some(transform) = transform.as_mut() {
+            match transform(&event) {
+                ControlFlow::Break(_) => break,
+                ControlFlow::Continue(Some(ev)) => event = ev,
+                ControlFlow::Continue(None) => {}
+            }
+        };
         match event {
             Event::Start(tag) => {
                 // TODO: handle ordered list with List(Some(idx))
@@ -41,6 +109,21 @@ pub fn parse<'a>(source: &'a str) -> Text<'a> {
                         header.push(' ');
                         let style = get_heading_style(level);
                         spans.push(Span::new(header).style(style))
+                    }
+                    Tag::BlockQuote => {
+                        let quoted = parse(
+                            events,
+                            Some(Box::new(|ev| match ev {
+                                Event::End(Tag::BlockQuote) => ControlFlow::Break(()),
+                                _ => ControlFlow::Continue(None),
+                            })),
+                        );
+                        flush_lines(&mut column, &mut lines);
+                        // FIXME: Blockquotes have a final newline since a
+                        // heading/paragraph/codeblock/list at the end automatically pushes
+                        // a new line, see Event::End(..) below.
+                        column.push(Container::new(BlockQuote::new(quoted)).fg(Color::Gray));
+                        lines.push(Spans::default());
                     }
                     _ => (),
                 }
@@ -77,17 +160,9 @@ pub fn parse<'a>(source: &'a str) -> Text<'a> {
                     }
                     Some(Tag::CodeBlock(_)) => {
                         // line breaks in codeblocks are not reported as events
-                        // BUG: In codeblocks, pulldown_cmark does not report line ending events
-                        // (HardBreak) and everything inside the block is send as one Text
-                        // event. This seems to be the desired behavior, but crlf line
-                        // endings cause the text to be broken up as separate Text events
-                        // on each newline, but they also have a `\n` at the beginning of
-                        // every line. Github uses crlf, so this ends up being a problem for us.
-                        let text = text.trim_start_matches('\n');
-                        // TODO: append each line to lines vector since a Span is supposed
-                        // to last only a single line
-                        let span = Span::new(text.to_string()).style(block_code_style.clone());
-                        lines.push(Spans::from(span));
+                        let code = Text::from(text.deref()).cloned();
+                        flush_lines(&mut column, &mut lines);
+                        column.push(Container::new(code).bg(Color::Gray).width(usize::MAX));
                     }
                     Some(Tag::Strikethrough) => spans.push(Span::new(text).strikethrough(true)),
                     Some(_) | None => spans.push(Span::new(text)),
@@ -106,8 +181,9 @@ pub fn parse<'a>(source: &'a str) -> Text<'a> {
                 lines.push(Spans::new(spans));
             }
             Event::Rule => {
-                lines.push(Spans::from(Span::new("━━━━━━━━━━━━")));
-                lines.push(Spans::default());
+                flush_lines(&mut column, &mut lines);
+                column.push(HorizontalRule::new());
+                column.push(Text::from("\n"));
             }
             _ => {
                 log::warn!("unhandled markdown event {:?}", event);
@@ -115,5 +191,34 @@ pub fn parse<'a>(source: &'a str) -> Text<'a> {
         }
     }
 
-    Text::new(lines)
+    if !lines.is_empty() {
+        column.push(Text::new(lines).cloned());
+    }
+
+    column
+}
+
+struct BlockQuote<R: Renderable> {
+    pub child: R,
+}
+
+impl<R: Renderable> BlockQuote<R> {
+    fn new(child: R) -> Self {
+        Self { child }
+    }
+}
+
+impl<R: Renderable> Renderable for BlockQuote<R> {
+    fn render(&self, surface: &mut meow::Surface) {
+        Layout::horizontal()
+            .push(VerticalRule {})
+            .push(BlankLine::vertical())
+            .push(&self.child)
+            .render(surface);
+    }
+
+    fn size(&self) -> (meow::components::Width, meow::components::Height) {
+        let (width, height) = self.child.size();
+        (width.saturating_add(2), height)
+    }
 }
