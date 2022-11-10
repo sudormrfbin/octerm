@@ -5,7 +5,7 @@ pub mod network;
 pub mod util;
 
 use meow::{
-    components::{line::BlankLine, Component, Layout, List, ListMsg, Span},
+    components::{line::Line, Component, Layout, List, ListMsg, Span},
     key,
     layout::Constraint,
     spans,
@@ -154,7 +154,10 @@ impl App for OctermApp {
 
         column
             .push(&model.notifs)
-            .push_constrained(BlankLine::horizontal(), Constraint::weak().gte().length(0))
+            .push_constrained(
+                Line::horizontal().blank(),
+                Constraint::weak().gte().length(0),
+            )
             .push_constrained(status_line, Constraint::strong().eq().length(1));
 
         Box::new(column)

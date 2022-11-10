@@ -5,8 +5,8 @@ use std::{
 
 use meow::{
     components::{
-        line::{BlankLine, HorizontalRule, VerticalRule},
         container::Container,
+        line::Line,
         scroll::Scrollable,
         text::{Span, Spans, Text},
         Layout, Renderable,
@@ -182,7 +182,7 @@ pub fn parse<'a, I: Iterator<Item = Event<'a>>>(
             }
             Event::Rule => {
                 flush_lines(&mut column, &mut lines);
-                column.push(HorizontalRule::new());
+                column.push(Line::horizontal());
                 column.push(Text::from("\n"));
             }
             _ => {
@@ -211,8 +211,8 @@ impl<R: Renderable> BlockQuote<R> {
 impl<R: Renderable> Renderable for BlockQuote<R> {
     fn render(&self, surface: &mut meow::Surface) {
         Layout::horizontal()
-            .push(VerticalRule {})
-            .push(BlankLine::vertical())
+            .push(Line::vertical())
+            .push(Line::vertical().blank())
             .push(&self.child)
             .render(surface);
     }
