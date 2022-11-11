@@ -23,24 +23,24 @@ impl Notification {
     pub fn sorter(&self) -> impl Ord {
         let irrelavance = match self.target {
             NotificationTarget::Release(_) => 100,
-            NotificationTarget::PullRequest(PullRequest {
+            NotificationTarget::PullRequest(PullRequestMeta {
                 state: PullRequestState::Merged,
                 ..
             }) => 90,
-            NotificationTarget::PullRequest(PullRequest {
+            NotificationTarget::PullRequest(PullRequestMeta {
                 state: PullRequestState::Closed,
                 ..
             }) => 80,
-            NotificationTarget::Issue(Issue {
+            NotificationTarget::Issue(IssueMeta {
                 state: IssueState::Closed,
                 ..
             }) => 70,
             NotificationTarget::Discussion => 60,
-            NotificationTarget::Issue(Issue {
+            NotificationTarget::Issue(IssueMeta {
                 state: IssueState::Open,
                 ..
             }) => 50,
-            NotificationTarget::PullRequest(PullRequest {
+            NotificationTarget::PullRequest(PullRequestMeta {
                 state: PullRequestState::Open,
                 ..
             }) => 40,
@@ -73,12 +73,15 @@ impl Notification {
             "Issue" => {
                 let issue: octocrab::models::issues::Issue =
                     octocrab::instance().get(url, None::<&()>).await?;
-                NotificationTarget::Issue(issue.into())
+                NotificationTarget::Issue(IssueMeta::new(issue, RepoMeta::from(&notif.repository)))
             }
             "PullRequest" => {
                 let pr: octocrab::models::pulls::PullRequest =
                     octocrab::instance().get(url, None::<&()>).await?;
-                NotificationTarget::PullRequest(pr.into())
+                NotificationTarget::PullRequest(PullRequestMeta::new(
+                    pr,
+                    RepoMeta::from(&notif.repository),
+                ))
             }
             "Release" => {
                 let release: octocrab::models::repos::Release =
@@ -98,8 +101,8 @@ impl Notification {
 
 #[derive(Clone)]
 pub enum NotificationTarget {
-    Issue(Issue),
-    PullRequest(PullRequest),
+    Issue(IssueMeta),
+    PullRequest(PullRequestMeta),
     Release(Release),
     Discussion,
     CiBuild,
@@ -120,8 +123,27 @@ impl NotificationTarget {
 }
 
 #[derive(Clone)]
-pub struct Issue {
-    pub inner: octocrab::models::issues::Issue,
+pub struct RepoMeta {
+    name: String,
+    owner: String,
+}
+
+impl From<&octocrab::models::Repository> for RepoMeta {
+    fn from(r: &octocrab::models::Repository) -> Self {
+        RepoMeta {
+            name: r.name.clone(),
+            owner: r
+                .owner
+                .as_ref()
+                .map(|u| u.login.clone())
+                .unwrap_or_default(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct IssueMeta {
+    pub repo: RepoMeta,
     pub title: String,
     pub body: String,
     pub unique: String,
@@ -129,22 +151,14 @@ pub struct Issue {
     pub state: IssueState,
 }
 
-impl Issue {
-    pub fn icon(&self) -> &'static str {
-        match self.state {
-            IssueState::Open => "",
-            IssueState::Closed => "",
-        }
-    }
-}
-
-impl From<octocrab::models::issues::Issue> for Issue {
-    fn from(issue: octocrab::models::issues::Issue) -> Self {
+impl IssueMeta {
+    pub fn new(issue: octocrab::models::issues::Issue, repo: RepoMeta) -> Self {
         let state = match issue.closed_at {
             Some(_) => IssueState::Closed,
             None => IssueState::Open,
         };
         Self {
+            repo,
             title: issue.title.clone(),
             body: issue
                 .body
@@ -152,8 +166,16 @@ impl From<octocrab::models::issues::Issue> for Issue {
                 .unwrap_or_else(|| "No description provided.".to_string()),
             unique: issue.number.to_string(),
             author: issue.user.login.clone(),
-            inner: issue,
             state,
+        }
+    }
+}
+
+impl IssueMeta {
+    pub fn icon(&self) -> &'static str {
+        match self.state {
+            IssueState::Open => "",
+            IssueState::Closed => "",
         }
     }
 }
@@ -178,8 +200,8 @@ impl Display for IssueState {
 }
 
 #[derive(Clone)]
-pub struct PullRequest {
-    pub inner: octocrab::models::pulls::PullRequest,
+pub struct PullRequestMeta {
+    pub repo: RepoMeta,
     pub title: String,
     pub body: String,
     pub unique: String,
@@ -187,18 +209,8 @@ pub struct PullRequest {
     pub state: PullRequestState,
 }
 
-impl PullRequest {
-    pub fn icon(&self) -> &'static str {
-        match self.state {
-            PullRequestState::Open => "",
-            PullRequestState::Merged => "",
-            PullRequestState::Closed => "",
-        }
-    }
-}
-
-impl From<octocrab::models::pulls::PullRequest> for PullRequest {
-    fn from(pr: octocrab::models::pulls::PullRequest) -> Self {
+impl PullRequestMeta {
+    pub fn new(pr: octocrab::models::pulls::PullRequest, repo: RepoMeta) -> Self {
         let state = match pr.merged_at {
             Some(_) => PullRequestState::Merged,
             None => match pr.closed_at {
@@ -207,6 +219,7 @@ impl From<octocrab::models::pulls::PullRequest> for PullRequest {
             },
         };
         Self {
+            repo,
             title: pr.title.clone().unwrap_or_default(),
             body: pr
                 .body
@@ -215,7 +228,16 @@ impl From<octocrab::models::pulls::PullRequest> for PullRequest {
             unique: pr.number.to_string(),
             author: pr.user.clone().map(|u| u.login.clone()).unwrap_or_default(),
             state,
-            inner: pr,
+        }
+    }
+}
+
+impl PullRequestMeta {
+    pub fn icon(&self) -> &'static str {
+        match self.state {
+            PullRequestState::Open => "",
+            PullRequestState::Merged => "",
+            PullRequestState::Closed => "",
         }
     }
 }
