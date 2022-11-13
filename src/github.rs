@@ -124,8 +124,8 @@ impl NotificationTarget {
 
 #[derive(Clone)]
 pub struct RepoMeta {
-    name: String,
-    owner: String,
+    pub name: String,
+    pub owner: String,
 }
 
 impl From<&octocrab::models::Repository> for RepoMeta {
@@ -146,7 +146,7 @@ pub struct IssueMeta {
     pub repo: RepoMeta,
     pub title: String,
     pub body: String,
-    pub unique: String,
+    pub number: u64,
     pub author: String,
     pub state: IssueState,
 }
@@ -164,7 +164,7 @@ impl IssueMeta {
                 .body
                 .clone()
                 .unwrap_or_else(|| "No description provided.".to_string()),
-            unique: issue.number.to_string(),
+            number: issue.number.unsigned_abs(), // why is it even i64 in the first place?
             author: issue.user.login.clone(),
             state,
         }
@@ -196,6 +196,31 @@ impl Display for IssueState {
                 Self::Closed => "Closed",
             }
         )
+    }
+}
+
+pub struct IssueComment {
+    pub author: String,
+    pub body: Option<String>,
+}
+
+impl From<octocrab::models::issues::Comment> for IssueComment {
+    fn from(c: octocrab::models::issues::Comment) -> Self {
+        IssueComment {
+            author: c.user.login,
+            body: c.body,
+        }
+    }
+}
+
+pub struct Issue {
+    pub meta: IssueMeta,
+    pub comments: Vec<IssueComment>,
+}
+
+impl Issue {
+    pub fn new(meta: IssueMeta, comments: Vec<IssueComment>) -> Self {
+        Self { meta, comments }
     }
 }
 
