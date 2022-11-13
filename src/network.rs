@@ -6,7 +6,7 @@ use octocrab::{models::activity::Notification as OctoNotification, Page};
 use tokio::task::JoinHandle;
 
 use crate::error::{Error, Result};
-use crate::github::Notification;
+use crate::github::{Issue, IssueComment, IssueMeta, Notification};
 use crate::{ServerRequest, ServerResponse};
 
 type Channel = ServerChannel<ServerRequest, ServerResponse>;
@@ -19,8 +19,9 @@ pub async fn start_server(channel: Channel) {
 
         let res = match req {
             ServerRequest::RefreshNotifs => refresh(send).await,
-            ServerRequest::OpenNotifInBrowser(n) => open(n).await,
+            ServerRequest::OpenNotifInBrowser(n) => open_in_browser(n).await,
             ServerRequest::MarkNotifAsRead(n) => mark_as_read(send, n).await,
+            ServerRequest::OpenIssue(issue) => open_issue(issue, send).await,
         };
         send(ServerResponse::AsyncTaskDone);
 
@@ -28,6 +29,23 @@ pub async fn start_server(channel: Channel) {
             send(ServerResponse::Error(err));
         }
     }
+}
+
+async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<()> {
+    let comments = octocrab::instance()
+        .issues(issue.repo.owner.clone(), issue.repo.name.clone())
+        .list_comments(issue.number)
+        .per_page(100)
+        .send()
+        .await?
+        .take_items()
+        .into_iter()
+        .map(IssueComment::from)
+        .collect();
+
+    send(ServerResponse::Issue(Issue::new(issue, comments)));
+
+    Ok(())
 }
 
 async fn get_all_notifs() -> Result<Vec<OctoNotification>> {
@@ -95,7 +113,7 @@ pub async fn refresh(send: impl Fn(ServerResponse)) -> Result<()> {
     Ok(())
 }
 
-pub async fn open(notif: Notification) -> Result<()> {
+pub async fn open_in_browser(notif: Notification) -> Result<()> {
     let default_url = notif
         .inner
         .subject

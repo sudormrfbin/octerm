@@ -1,29 +1,29 @@
+pub mod components;
 pub mod error;
 pub mod github;
 pub mod markdown;
 pub mod network;
 pub mod util;
 
+use components::{IssueViewMsg, NotificationsView, NotificationsViewMsg};
+use github::{Issue, IssueMeta};
 use meow::{
-    components::{line::Line, Component, Layout, List, ListMsg, Span},
+    components::{line::Line, Component, Layout},
     key,
     layout::Constraint,
     spans,
-    style::{Color, Style, Stylize},
+    style::{Color, Stylize},
     App, Cmd, FromResponse,
 };
 
-use crate::{error::Error, github::Notification, util::notif_target_color};
+use crate::{error::Error, github::Notification};
 
 pub enum Msg {
-    Quit,
-    RefreshNotifs,
-    OpenNotifInBrowser,
-    MarkNotifAsRead,
     ClearError,
     ServerResponse(ServerResponse),
 
-    ListMsg(ListMsg),
+    NotifViewMsg(NotificationsViewMsg),
+    IssueViewMsg(IssueViewMsg),
 }
 
 impl FromResponse<ServerResponse> for Msg {
@@ -32,9 +32,15 @@ impl FromResponse<ServerResponse> for Msg {
     }
 }
 
+pub enum Route {
+    Notifications,
+    Issue(components::IssueView),
+}
+
 pub struct Model {
-    notifs: List<Notification>,
+    notifs: NotificationsView,
     async_task_doing: bool,
+    route: Route,
     error: Option<Error>,
 }
 
@@ -42,11 +48,13 @@ pub enum ServerRequest {
     RefreshNotifs,
     OpenNotifInBrowser(Notification),
     MarkNotifAsRead(Notification),
+    OpenIssue(IssueMeta),
 }
 
 pub enum ServerResponse {
     Notifications(Vec<Notification>),
     MarkedNotifAsRead(Notification),
+    Issue(Issue),
     AsyncTaskStart,
     AsyncTaskDone,
     Error(Error),
@@ -63,66 +71,77 @@ impl App for OctermApp {
 
     fn init() -> Self::Model {
         Model {
-            notifs: List::new(Vec::new(), |notif| {
-                let icon = notif.target.icon();
-                let type_color = notif_target_color(&notif.target);
-
-                let mut type_style = Style::default().fg(type_color);
-                let mut repo_style = Style::default();
-
-                if !notif.inner.unread {
-                    type_style = type_style.fg(Color::Gray);
-                    repo_style = repo_style.fg(Color::Gray);
-                }
-
-                let title = notif.inner.subject.title.as_str();
-                let repo = notif.inner.repository.name.clone();
-                Box::new(spans![
-                    Span::new(format!("{repo}: ")).style(repo_style),
-                    Span::from(format!("{icon} {title}")).style(type_style),
-                ])
-            }),
+            notifs: NotificationsView::new(),
             async_task_doing: false,
+            route: Route::Notifications,
             error: None,
         }
     }
 
-    fn event_to_msg(event: meow::AppEvent, _model: &Self::Model) -> Option<Self::Msg> {
+    fn event_to_msg(event: meow::AppEvent, model: &Self::Model) -> Option<Self::Msg> {
         match event {
-            key!('q') => Some(Msg::Quit),
-            key!('o') => Some(Msg::OpenNotifInBrowser),
-            key!('R') => Some(Msg::RefreshNotifs),
-            key!('d') => Some(Msg::MarkNotifAsRead),
             key!(Escape) => Some(Msg::ClearError),
-            _ => Some(Msg::ListMsg(_model.notifs.event_to_msg(event)?)),
+            _ => match model.route {
+                Route::Notifications => Some(Msg::NotifViewMsg(model.notifs.event_to_msg(event)?)),
+                Route::Issue(ref issue) => Some(Msg::IssueViewMsg(issue.event_to_msg(event)?)),
+            },
         }
     }
 
     fn update(msg: Self::Msg, model: &mut Self::Model) -> meow::Cmd<Self::Request> {
         match msg {
-            Msg::Quit => Cmd::Quit,
             Msg::ClearError => {
                 model.error = None;
                 Cmd::None
             }
-            Msg::RefreshNotifs => Cmd::ServerRequest(ServerRequest::RefreshNotifs),
-            Msg::OpenNotifInBrowser => Cmd::ServerRequest(ServerRequest::OpenNotifInBrowser(
-                model.notifs.selected_item().clone(),
-            )),
-            Msg::MarkNotifAsRead => Cmd::ServerRequest(ServerRequest::MarkNotifAsRead(
-                model.notifs.selected_item().clone(),
-            )),
-            Msg::ListMsg(msg) => model.notifs.update(msg),
+
+            Msg::NotifViewMsg(NotificationsViewMsg::Refresh) => {
+                Cmd::ServerRequest(ServerRequest::RefreshNotifs)
+            }
+            Msg::NotifViewMsg(NotificationsViewMsg::OpenInBrowser) => Cmd::ServerRequest(
+                ServerRequest::OpenNotifInBrowser(model.notifs.selected().clone()),
+            ),
+            Msg::NotifViewMsg(NotificationsViewMsg::MarkAsRead) => Cmd::ServerRequest(
+                ServerRequest::MarkNotifAsRead(model.notifs.selected().clone()),
+            ),
+            Msg::NotifViewMsg(NotificationsViewMsg::Open) => {
+                let notif = model.notifs.selected();
+                match notif.target {
+                    github::NotificationTarget::Issue(ref meta) => {
+                        Cmd::ServerRequest(ServerRequest::OpenIssue(meta.clone()))
+                    }
+                    _ => Cmd::None,
+                }
+            }
+            Msg::NotifViewMsg(NotificationsViewMsg::CloseView) => Cmd::Quit,
+            Msg::NotifViewMsg(msg) => model.notifs.update(msg),
+
+            Msg::IssueViewMsg(IssueViewMsg::CloseView) => {
+                model.route = Route::Notifications;
+                Cmd::None
+            }
+            Msg::IssueViewMsg(IssueViewMsg::OpenInBrowser) => Cmd::ServerRequest(
+                // HACK: Ideally we want to open the issue using the issue number
+                // stored in the IssueView model instead of relying on the state
+                // of another component that is not even in view. But since we
+                // don't have a model and only reuse an IssueView, this is a hack.
+                ServerRequest::OpenNotifInBrowser(model.notifs.selected().clone()),
+            ),
+            Msg::IssueViewMsg(msg) => match model.route {
+                Route::Issue(ref mut issue) => issue.update(msg),
+                _ => Cmd::None,
+            },
+
             Msg::ServerResponse(resp) => {
                 match resp {
                     ServerResponse::Notifications(mut notifs) => {
-                        model.notifs.value_mut(|list| {
+                        model.notifs.list.value_mut(|list| {
                             list.clear();
                             list.append(&mut notifs);
                             meow::components::ListStateSync::Reset
                         });
                     }
-                    ServerResponse::MarkedNotifAsRead(n) => model.notifs.value_mut(|list| {
+                    ServerResponse::MarkedNotifAsRead(n) => model.notifs.list.value_mut(|list| {
                         let pos = list.iter().position(|no| no == &n);
                         if let Some(pos) = pos {
                             list.remove(pos);
@@ -133,6 +152,9 @@ impl App for OctermApp {
                     ServerResponse::AsyncTaskStart => model.async_task_doing = true,
                     ServerResponse::AsyncTaskDone => model.async_task_doing = false,
                     ServerResponse::Error(err) => model.error = Some(err),
+                    ServerResponse::Issue(issue) => {
+                        model.route = Route::Issue(issue.into());
+                    }
                 }
                 Cmd::None
             }
@@ -149,11 +171,18 @@ impl App for OctermApp {
             .fg(Color::Red)];
 
         if model.async_task_doing {
-            status_line.0.insert(0, "Loading... | ".into())
+            match status_line.0.len() {
+                0 => status_line.0.push("Loading...".into()),
+                _ => status_line.0.insert(0, "Loading... | ".into()),
+            }
         }
 
+        match model.route {
+            Route::Notifications => column.push(&model.notifs),
+            Route::Issue(ref issue) => column.push(issue),
+        };
+
         column
-            .push(&model.notifs)
             .push_constrained(
                 Line::horizontal().blank(),
                 Constraint::weak().gte().length(0),

@@ -172,7 +172,7 @@ pub fn parse<'a, I: Iterator<Item = Event<'a>>>(
                 spans.push(Span::new("▐"));
                 spans.push(Span::new(text).style(code_style.clone()));
                 spans.push(Span::new("▌"));
-            },
+            }
             Event::Html(text) => {
                 for line in text.lines() {
                     let span = Span::new(line.to_string()).style(html_style.clone());
