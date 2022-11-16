@@ -53,12 +53,6 @@ pub enum ServerRequest {
     OpenIssue(IssueMeta),
 }
 
-impl From<ServerRequest> for Cmd<ServerRequest> {
-    fn from(req: ServerRequest) -> Self {
-        Cmd::ServerRequest(req)
-    }
-}
-
 pub enum ServerResponse {
     Notifications(Vec<Notification>),
     MarkedNotifAsRead(Notification),
@@ -104,20 +98,18 @@ impl App for OctermApp {
                 Cmd::None
             }
 
-            Msg::NotifViewMsg(NotificationsViewMsg::Refresh) => {
-                Cmd::ServerRequest(ServerRequest::RefreshNotifs)
+            Msg::NotifViewMsg(NotificationsViewMsg::Refresh) => ServerRequest::RefreshNotifs.into(),
+            Msg::NotifViewMsg(NotificationsViewMsg::OpenInBrowser) => {
+                ServerRequest::OpenNotifInBrowser(model.notifs.selected().clone()).into()
             }
-            Msg::NotifViewMsg(NotificationsViewMsg::OpenInBrowser) => Cmd::ServerRequest(
-                ServerRequest::OpenNotifInBrowser(model.notifs.selected().clone()),
-            ),
-            Msg::NotifViewMsg(NotificationsViewMsg::MarkAsRead) => Cmd::ServerRequest(
-                ServerRequest::MarkNotifAsRead(model.notifs.selected().clone()),
-            ),
+            Msg::NotifViewMsg(NotificationsViewMsg::MarkAsRead) => {
+                ServerRequest::MarkNotifAsRead(model.notifs.selected().clone()).into()
+            }
             Msg::NotifViewMsg(NotificationsViewMsg::Open) => {
                 let notif = model.notifs.selected();
                 match notif.target {
                     github::NotificationTarget::Issue(ref meta) => {
-                        Cmd::ServerRequest(ServerRequest::OpenIssue(meta.clone()))
+                        ServerRequest::OpenIssue(meta.clone()).into()
                     }
                     github::NotificationTarget::Release(ref release) => {
                         model.route = Route::Release(release.clone().into());
@@ -133,13 +125,13 @@ impl App for OctermApp {
                 model.route = Route::Notifications;
                 Cmd::None
             }
-            Msg::IssueViewMsg(IssueViewMsg::OpenInBrowser) => Cmd::ServerRequest(
+            Msg::IssueViewMsg(IssueViewMsg::OpenInBrowser) => {
                 // HACK: Ideally we want to open the issue using the issue number
                 // stored in the IssueView model instead of relying on the state
                 // of another component that is not even in view. But since we
                 // don't have a model and only reuse an IssueView, this is a hack.
-                ServerRequest::OpenNotifInBrowser(model.notifs.selected().clone()),
-            ),
+                ServerRequest::OpenNotifInBrowser(model.notifs.selected().clone()).into()
+            }
             Msg::IssueViewMsg(msg) => match model.route {
                 Route::Issue(ref mut issue) => issue.update(msg),
                 _ => Cmd::None,
