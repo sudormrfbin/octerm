@@ -39,13 +39,6 @@ pub enum Route {
     Release(components::ReleaseView),
 }
 
-pub struct Model {
-    notifs: NotificationsView,
-    async_task_doing: bool,
-    route: Route,
-    error: Option<Error>,
-}
-
 pub enum ServerRequest {
     RefreshNotifs,
     OpenNotifInBrowser(Notification),
@@ -60,6 +53,105 @@ pub enum ServerResponse {
     AsyncTaskStart,
     AsyncTaskDone,
     Error(Error),
+}
+
+pub struct Model {
+    notifs: NotificationsView,
+    async_task_doing: bool,
+    route: Route,
+    error: Option<Error>,
+}
+
+impl Model {
+    fn update_notif_view_msg(&mut self, msg: NotificationsViewMsg) -> Cmd<ServerRequest> {
+        match msg {
+            NotificationsViewMsg::Refresh => ServerRequest::RefreshNotifs.into(),
+            NotificationsViewMsg::OpenInBrowser => {
+                ServerRequest::OpenNotifInBrowser(self.notifs.selected().clone()).into()
+            }
+            NotificationsViewMsg::MarkAsRead => {
+                ServerRequest::MarkNotifAsRead(self.notifs.selected().clone()).into()
+            }
+            NotificationsViewMsg::Open => {
+                let notif = self.notifs.selected();
+                match notif.target {
+                    github::NotificationTarget::Issue(ref meta) => {
+                        ServerRequest::OpenIssue(meta.clone()).into()
+                    }
+                    github::NotificationTarget::Release(ref release) => {
+                        self.route = Route::Release(release.clone().into());
+                        Cmd::None
+                    }
+                    _ => Cmd::None,
+                }
+            }
+            NotificationsViewMsg::CloseView => Cmd::Quit,
+            _ => self.notifs.update(msg),
+        }
+    }
+
+    fn update_issue_view_msg(&mut self, msg: IssueViewMsg) -> Cmd<ServerRequest> {
+        match msg {
+            IssueViewMsg::CloseView => {
+                self.route = Route::Notifications;
+                Cmd::None
+            }
+            IssueViewMsg::OpenInBrowser => {
+                // HACK: Ideally we want to open the issue using the issue number
+                // stored in the IssueView model instead of relying on the state
+                // of another component that is not even in view. But since we
+                // don't have a model and only reuse an IssueView, this is a hack.
+                ServerRequest::OpenNotifInBrowser(self.notifs.selected().clone()).into()
+            }
+            _ => match self.route {
+                Route::Issue(ref mut issue) => issue.update(msg),
+                _ => Cmd::None,
+            },
+        }
+    }
+
+    fn update_release_view_msg(&mut self, msg: ReleaseViewMsg) -> Cmd<ServerRequest> {
+        match msg {
+            ReleaseViewMsg::CloseView => self.route = Route::Notifications,
+            ReleaseViewMsg::OpenInBrowser => {
+                return ServerRequest::OpenNotifInBrowser(self.notifs.selected().clone()).into()
+            }
+            _ => {
+                if let Route::Release(ref mut release) = self.route {
+                    return release.update(msg);
+                }
+            }
+        }
+
+        Cmd::None
+    }
+
+    fn update_in_response(&mut self, resp: ServerResponse) -> Cmd<ServerRequest> {
+        match resp {
+            ServerResponse::Notifications(mut notifs) => {
+                self.notifs.list.value_mut(|list| {
+                    list.clear();
+                    list.append(&mut notifs);
+                    meow::components::ListStateSync::Reset
+                });
+            }
+            ServerResponse::MarkedNotifAsRead(n) => self.notifs.list.value_mut(|list| {
+                let pos = list.iter().position(|no| no == &n);
+                if let Some(pos) = pos {
+                    list.remove(pos);
+                }
+
+                meow::components::ListStateSync::Adjust
+            }),
+            ServerResponse::AsyncTaskStart => self.async_task_doing = true,
+            ServerResponse::AsyncTaskDone => self.async_task_doing = false,
+            ServerResponse::Error(err) => self.error = Some(err),
+            ServerResponse::Issue(issue) => {
+                self.route = Route::Issue(issue.into());
+            }
+        }
+        Cmd::None
+    }
 }
 
 pub struct OctermApp {}
@@ -98,82 +190,10 @@ impl App for OctermApp {
                 Cmd::None
             }
 
-            Msg::NotifViewMsg(NotificationsViewMsg::Refresh) => ServerRequest::RefreshNotifs.into(),
-            Msg::NotifViewMsg(NotificationsViewMsg::OpenInBrowser) => {
-                ServerRequest::OpenNotifInBrowser(model.notifs.selected().clone()).into()
-            }
-            Msg::NotifViewMsg(NotificationsViewMsg::MarkAsRead) => {
-                ServerRequest::MarkNotifAsRead(model.notifs.selected().clone()).into()
-            }
-            Msg::NotifViewMsg(NotificationsViewMsg::Open) => {
-                let notif = model.notifs.selected();
-                match notif.target {
-                    github::NotificationTarget::Issue(ref meta) => {
-                        ServerRequest::OpenIssue(meta.clone()).into()
-                    }
-                    github::NotificationTarget::Release(ref release) => {
-                        model.route = Route::Release(release.clone().into());
-                        Cmd::None
-                    }
-                    _ => Cmd::None,
-                }
-            }
-            Msg::NotifViewMsg(NotificationsViewMsg::CloseView) => Cmd::Quit,
-            Msg::NotifViewMsg(msg) => model.notifs.update(msg),
-
-            Msg::IssueViewMsg(IssueViewMsg::CloseView) => {
-                model.route = Route::Notifications;
-                Cmd::None
-            }
-            Msg::IssueViewMsg(IssueViewMsg::OpenInBrowser) => {
-                // HACK: Ideally we want to open the issue using the issue number
-                // stored in the IssueView model instead of relying on the state
-                // of another component that is not even in view. But since we
-                // don't have a model and only reuse an IssueView, this is a hack.
-                ServerRequest::OpenNotifInBrowser(model.notifs.selected().clone()).into()
-            }
-            Msg::IssueViewMsg(msg) => match model.route {
-                Route::Issue(ref mut issue) => issue.update(msg),
-                _ => Cmd::None,
-            },
-            Msg::ReleaseViewMsg(ReleaseViewMsg::CloseView) => {
-                model.route = Route::Notifications;
-                Cmd::None
-            }
-            Msg::ReleaseViewMsg(ReleaseViewMsg::OpenInBrowser) => {
-                ServerRequest::OpenNotifInBrowser(model.notifs.selected().clone()).into()
-            }
-            Msg::ReleaseViewMsg(msg) => match model.route {
-                Route::Release(ref mut release) => release.update(msg),
-                _ => Cmd::None,
-            },
-
-            Msg::ServerResponse(resp) => {
-                match resp {
-                    ServerResponse::Notifications(mut notifs) => {
-                        model.notifs.list.value_mut(|list| {
-                            list.clear();
-                            list.append(&mut notifs);
-                            meow::components::ListStateSync::Reset
-                        });
-                    }
-                    ServerResponse::MarkedNotifAsRead(n) => model.notifs.list.value_mut(|list| {
-                        let pos = list.iter().position(|no| no == &n);
-                        if let Some(pos) = pos {
-                            list.remove(pos);
-                        }
-
-                        meow::components::ListStateSync::Adjust
-                    }),
-                    ServerResponse::AsyncTaskStart => model.async_task_doing = true,
-                    ServerResponse::AsyncTaskDone => model.async_task_doing = false,
-                    ServerResponse::Error(err) => model.error = Some(err),
-                    ServerResponse::Issue(issue) => {
-                        model.route = Route::Issue(issue.into());
-                    }
-                }
-                Cmd::None
-            }
+            Msg::NotifViewMsg(msg) => model.update_notif_view_msg(msg),
+            Msg::IssueViewMsg(msg) => model.update_issue_view_msg(msg),
+            Msg::ReleaseViewMsg(msg) => model.update_release_view_msg(msg),
+            Msg::ServerResponse(resp) => model.update_in_response(resp),
         }
     }
 
