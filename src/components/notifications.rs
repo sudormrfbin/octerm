@@ -70,16 +70,14 @@ impl Component for NotificationsView {
             key!('R') => Some(NotificationsViewMsg::Refresh),
             key!('d') => Some(NotificationsViewMsg::MarkAsRead),
             key!(Enter) => Some(NotificationsViewMsg::Open),
-            _ => Some(NotificationsViewMsg::ListMsg(
-                self.list.event_to_msg(event)?,
-            )),
+            _ => self.list.event_to_msg(event).map(Self::Msg::ListMsg),
         }
     }
 
     fn update<Request>(&mut self, msg: Self::Msg) -> meow::Cmd<Request> {
         match msg {
             NotificationsViewMsg::ListMsg(msg) => self.list.update(msg),
-            _ => meow::Cmd::None
+            _ => meow::Cmd::None,
         }
     }
 }

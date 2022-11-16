@@ -90,11 +90,9 @@ impl App for OctermApp {
         match event {
             key!(Escape) => Some(Msg::ClearError),
             _ => match model.route {
-                Route::Notifications => Some(Msg::NotifViewMsg(model.notifs.event_to_msg(event)?)),
-                Route::Issue(ref issue) => Some(Msg::IssueViewMsg(issue.event_to_msg(event)?)),
-                Route::Release(ref release) => {
-                    Some(Msg::ReleaseViewMsg(release.event_to_msg(event)?))
-                }
+                Route::Notifications => model.notifs.event_to_msg(event).map(Msg::NotifViewMsg),
+                Route::Issue(ref issue) => issue.event_to_msg(event).map(Msg::IssueViewMsg),
+                Route::Release(ref release) => release.event_to_msg(event).map(Msg::ReleaseViewMsg),
             },
         }
     }

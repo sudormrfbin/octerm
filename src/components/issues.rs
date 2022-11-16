@@ -69,7 +69,7 @@ impl Component for IssueView {
         match event {
             key!('q') => Some(IssueViewMsg::CloseView),
             key!('o') => Some(IssueViewMsg::OpenInBrowser),
-            _ => Some(IssueViewMsg::Scroll(self.body.event_to_msg(event)?)),
+            _ => self.body.event_to_msg(event).map(IssueViewMsg::Scroll),
         }
     }
 

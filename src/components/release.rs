@@ -20,12 +20,6 @@ pub enum ReleaseViewMsg {
     CloseView,
 }
 
-impl From<ScrollMsg> for ReleaseViewMsg {
-    fn from(s: ScrollMsg) -> Self {
-        ReleaseViewMsg::Scroll(s)
-    }
-}
-
 pub struct ReleaseView {
     body: Scroll<Layout<'static>>,
 }
@@ -62,7 +56,7 @@ impl Component for ReleaseView {
         match event {
             key!('q') => Some(ReleaseViewMsg::CloseView),
             key!('o') => Some(ReleaseViewMsg::OpenInBrowser),
-            _ => Some(self.body.event_to_msg(event)?.into()),
+            _ => self.body.event_to_msg(event).map(ReleaseViewMsg::Scroll),
         }
     }
 
