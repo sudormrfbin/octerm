@@ -5,7 +5,7 @@ pub mod markdown;
 pub mod network;
 pub mod util;
 
-use components::{IssueViewMsg, NotificationsView, NotificationsViewMsg};
+use components::{release::ReleaseViewMsg, IssueViewMsg, NotificationsView, NotificationsViewMsg};
 use github::{Issue, IssueMeta};
 use meow::{
     components::{line::Line, Component, Layout},
@@ -24,6 +24,7 @@ pub enum Msg {
 
     NotifViewMsg(NotificationsViewMsg),
     IssueViewMsg(IssueViewMsg),
+    ReleaseViewMsg(ReleaseViewMsg),
 }
 
 impl FromResponse<ServerResponse> for Msg {
@@ -35,6 +36,7 @@ impl FromResponse<ServerResponse> for Msg {
 pub enum Route {
     Notifications,
     Issue(components::IssueView),
+    Release(components::ReleaseView),
 }
 
 pub struct Model {
@@ -49,6 +51,12 @@ pub enum ServerRequest {
     OpenNotifInBrowser(Notification),
     MarkNotifAsRead(Notification),
     OpenIssue(IssueMeta),
+}
+
+impl From<ServerRequest> for Cmd<ServerRequest> {
+    fn from(req: ServerRequest) -> Self {
+        Cmd::ServerRequest(req)
+    }
 }
 
 pub enum ServerResponse {
@@ -84,6 +92,9 @@ impl App for OctermApp {
             _ => match model.route {
                 Route::Notifications => Some(Msg::NotifViewMsg(model.notifs.event_to_msg(event)?)),
                 Route::Issue(ref issue) => Some(Msg::IssueViewMsg(issue.event_to_msg(event)?)),
+                Route::Release(ref release) => {
+                    Some(Msg::ReleaseViewMsg(release.event_to_msg(event)?))
+                }
             },
         }
     }
@@ -110,6 +121,10 @@ impl App for OctermApp {
                     github::NotificationTarget::Issue(ref meta) => {
                         Cmd::ServerRequest(ServerRequest::OpenIssue(meta.clone()))
                     }
+                    github::NotificationTarget::Release(ref release) => {
+                        model.route = Route::Release(release.clone().into());
+                        Cmd::None
+                    }
                     _ => Cmd::None,
                 }
             }
@@ -129,6 +144,17 @@ impl App for OctermApp {
             ),
             Msg::IssueViewMsg(msg) => match model.route {
                 Route::Issue(ref mut issue) => issue.update(msg),
+                _ => Cmd::None,
+            },
+            Msg::ReleaseViewMsg(ReleaseViewMsg::CloseView) => {
+                model.route = Route::Notifications;
+                Cmd::None
+            }
+            Msg::ReleaseViewMsg(ReleaseViewMsg::OpenInBrowser) => {
+                ServerRequest::OpenNotifInBrowser(model.notifs.selected().clone()).into()
+            }
+            Msg::ReleaseViewMsg(msg) => match model.route {
+                Route::Release(ref mut release) => release.update(msg),
                 _ => Cmd::None,
             },
 
@@ -180,6 +206,7 @@ impl App for OctermApp {
         match model.route {
             Route::Notifications => column.push(&model.notifs),
             Route::Issue(ref issue) => column.push(issue),
+            Route::Release(ref release) => column.push(release),
         };
 
         column

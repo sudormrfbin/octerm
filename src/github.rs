@@ -103,7 +103,7 @@ impl Notification {
 pub enum NotificationTarget {
     Issue(IssueMeta),
     PullRequest(PullRequestMeta),
-    Release(Release),
+    Release(ReleaseMeta),
     Discussion,
     CiBuild,
     Unknown,
@@ -289,20 +289,20 @@ impl Display for PullRequestState {
 }
 
 #[derive(Clone)]
-pub struct Release {
+pub struct ReleaseMeta {
     pub title: String,
     pub body: String,
-    pub unique: String,
-    pub inner: octocrab::models::repos::Release,
+    pub author: String,
+    pub tag_name: String,
 }
 
-impl Release {
+impl ReleaseMeta {
     pub fn icon(&self) -> &'static str {
         ""
     }
 }
 
-impl From<octocrab::models::repos::Release> for Release {
+impl From<octocrab::models::repos::Release> for ReleaseMeta {
     fn from(release: octocrab::models::repos::Release) -> Self {
         let title = release
             .name
@@ -314,8 +314,8 @@ impl From<octocrab::models::repos::Release> for Release {
                 .body
                 .clone()
                 .unwrap_or_else(|| "No description provided.".to_string()),
-            unique: release.tag_name.clone(),
-            inner: release,
+            author: release.author.login,
+            tag_name: release.tag_name,
         }
     }
 }
