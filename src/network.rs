@@ -6,7 +6,7 @@ use octocrab::{models::activity::Notification as OctoNotification, Page};
 use tokio::task::JoinHandle;
 
 use crate::error::{Error, Result};
-use crate::github::{Issue, IssueComment, IssueMeta, Notification};
+use crate::github::{self, Issue, IssueComment, IssueMeta, Notification};
 use crate::{ServerRequest, ServerResponse};
 
 type Channel = ServerChannel<ServerRequest, ServerResponse>;
@@ -41,6 +41,7 @@ async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<(
         .take_items()
         .into_iter()
         .map(IssueComment::from)
+        .map(github::events::Event::Commented)
         .collect();
 
     send(ServerResponse::Issue(Issue::new(issue, comments)));

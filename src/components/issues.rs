@@ -40,10 +40,12 @@ impl From<github::Issue> for IssueView {
                 issue.meta.author,
             )));
 
-        for comment in issue.comments {
+        for event in issue.events {
             layout
                 .push(Line::horizontal().blank())
-                .push(Container::new(IssueComment::from(comment)));
+                .push(Container::new(match event {
+                    github::events::Event::Commented(comment) => IssueComment::from(comment),
+                }));
         }
 
         Self {

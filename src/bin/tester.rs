@@ -70,8 +70,8 @@ It is not clear from this prompt that one of them goes to the middle click clipb
             author: "username".into(),
             state: github::IssueState::Open,
         },
-        comments: vec![
-            github::IssueComment {
+        events: vec![
+            github::events::Event::Commented(github::IssueComment {
                 author: User::new("issue-author"),
                 body: Some(r#"As a workaround you can specify a config for the lsp in the languaguages.toml. 
 Example:
@@ -87,14 +87,14 @@ language-server = { command = "metals" }
 config = {metals.ammoniteJvmProperties = ["-Xmx1G"]}
 ```
 "#.into()),
-                },
-            github::IssueComment {
+                }),
+            github::events::Event::Commented(github::IssueComment {
                 author: User::new("replier"),
                 body: Some("Just a heads up, we've fixed this in Metals.\
 You can test with the latest snapshot to see this working `0.11.9+128-92db24b7-SNAPSHOT`.\
 ".into()),
-                },
-            github::IssueComment {
+                }),
+            github::events::Event::Commented(github::IssueComment {
                 author: User::new("issue-author"),
                 body: Some(r#"As a workaround you can specify a config for the lsp in the languaguages.toml. 
 Example:
@@ -110,7 +110,7 @@ language-server = { command = "metals" }
 config = {metals.ammoniteJvmProperties = ["-Xmx1G"]}
 ```
 "#.into()),
-                },
+                }),
             ],
         }
 }

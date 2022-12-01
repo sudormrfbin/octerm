@@ -1,7 +1,12 @@
+pub mod events;
+
 use std::fmt::Display;
 
 use serde::Serialize;
+
 use crate::error::Result;
+
+use self::events::Event;
 
 #[derive(Clone)]
 pub struct Notification {
@@ -217,12 +222,12 @@ impl From<octocrab::models::issues::Comment> for IssueComment {
 
 pub struct Issue {
     pub meta: IssueMeta,
-    pub comments: Vec<IssueComment>,
+    pub events: Vec<Event>,
 }
 
 impl Issue {
-    pub fn new(meta: IssueMeta, comments: Vec<IssueComment>) -> Self {
-        Self { meta, comments }
+    pub fn new(meta: IssueMeta, events: Vec<Event>) -> Self {
+        Self { meta, events }
     }
 }
 
