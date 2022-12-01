@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use serde::Serialize;
 use crate::error::Result;
 
 #[derive(Clone)]
@@ -199,15 +200,16 @@ impl Display for IssueState {
     }
 }
 
+#[derive(Serialize)]
 pub struct IssueComment {
-    pub author: String,
+    pub author: User,
     pub body: Option<String>,
 }
 
 impl From<octocrab::models::issues::Comment> for IssueComment {
     fn from(c: octocrab::models::issues::Comment) -> Self {
         IssueComment {
-            author: c.user.login,
+            author: c.user.into(),
             body: c.body,
         }
     }
@@ -317,5 +319,23 @@ impl From<octocrab::models::repos::Release> for ReleaseMeta {
             author: release.author.login,
             tag_name: release.tag_name,
         }
+    }
+}
+
+#[derive(Serialize)]
+pub struct User {
+    /// The username with which the user logs in; the @ name.
+    pub name: String,
+}
+
+impl User {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into() }
+    }
+}
+
+impl From<octocrab::models::User> for User {
+    fn from(u: octocrab::models::User) -> Self {
+        Self { name: u.login }
     }
 }

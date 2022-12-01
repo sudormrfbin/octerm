@@ -987,6 +987,7 @@ dependencies = [
  "octocrab",
  "open",
  "pulldown-cmark",
+ "serde",
  "thiserror",
  "tokio",
 ]

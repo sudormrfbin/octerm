@@ -17,3 +17,4 @@ thiserror = "1.0.37"
 futures = "0.3.25"
 pulldown-cmark = { version = "0.9.2", default-features = false }
 meow-tui = { path = "../meow" }
+serde = { version = "1", features = ["derive"] }

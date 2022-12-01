@@ -112,7 +112,7 @@ impl From<github::IssueComment> for IssueComment {
     fn from(c: github::IssueComment) -> Self {
         Self::new(
             c.body.unwrap_or_else(|| "No description provided.".into()),
-            c.author,
+            c.author.name,
         )
     }
 }
