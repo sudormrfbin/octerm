@@ -104,7 +104,10 @@ impl IssueComment {
                     .fg(header_fg),
             )
             .push(
-                Border::new(Markdown::new(body.into()))
+                Border::new(meow::column![
+                    Line::horizontal().blank(),
+                    Markdown::new(body.into()),
+                ])
                     .top(false)
                     .style(BorderStyle {
                         style: Style::new().fg(header_bg),
