@@ -41,10 +41,15 @@ impl From<github::Issue> for IssueView {
             )));
 
         for event in issue.events {
+            if let github::events::Event::Unknown = event {
+                continue;
+            }
+
             layout
                 .push(Line::horizontal().blank())
                 .push(Container::new(match event {
                     github::events::Event::Commented(comment) => IssueComment::from(comment),
+                    github::events::Event::Unknown => unreachable!(),
                 }));
         }
 

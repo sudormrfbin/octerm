@@ -2,7 +2,7 @@ pub mod events;
 
 use std::fmt::Display;
 
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 use crate::error::Result;
 
@@ -205,8 +205,9 @@ impl Display for IssueState {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct IssueComment {
+    #[serde(rename = "user")]
     pub author: User,
     pub body: Option<String>,
 }
@@ -327,9 +328,10 @@ impl From<octocrab::models::repos::Release> for ReleaseMeta {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct User {
     /// The username with which the user logs in; the @ name.
+    #[serde(rename = "login")]
     pub name: String,
 }
 

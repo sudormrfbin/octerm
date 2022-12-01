@@ -6,7 +6,7 @@ use octocrab::{models::activity::Notification as OctoNotification, Page};
 use tokio::task::JoinHandle;
 
 use crate::error::{Error, Result};
-use crate::github::{self, Issue, IssueComment, IssueMeta, Notification};
+use crate::github::{self, Issue, IssueMeta, Notification};
 use crate::{ServerRequest, ServerResponse};
 
 type Channel = ServerChannel<ServerRequest, ServerResponse>;
@@ -32,19 +32,23 @@ pub async fn start_server(channel: Channel) {
 }
 
 async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<()> {
-    let comments = octocrab::instance()
-        .issues(issue.repo.owner.clone(), issue.repo.name.clone())
-        .list_comments(issue.number)
-        .per_page(100)
-        .send()
+    let events = octocrab::instance()
+        .get::<Page<github::events::Event>, String, TimelineParams>(
+            format!(
+                "repos/{owner}/{repo}/issues/{number}/timeline",
+                owner = issue.repo.owner.clone(),
+                repo = issue.repo.name.clone(),
+                number = issue.number,
+            ),
+            Some(&TimelineParams {
+                per_page: Some(100),
+                page: None,
+            }),
+        )
         .await?
-        .take_items()
-        .into_iter()
-        .map(IssueComment::from)
-        .map(github::events::Event::Commented)
-        .collect();
+        .take_items();
 
-    send(ServerResponse::Issue(Issue::new(issue, comments)));
+    send(ServerResponse::Issue(Issue::new(issue, events)));
 
     Ok(())
 }
@@ -174,4 +178,13 @@ pub async fn mark_as_read(send: impl Fn(ServerResponse), notif: Notification) ->
     send(ServerResponse::MarkedNotifAsRead(notif));
 
     Ok(())
+}
+
+/// Helper struct used to send the parameters for a issues timeline api call.
+#[derive(serde::Serialize)]
+struct TimelineParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    per_page: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    page: Option<usize>,
 }
