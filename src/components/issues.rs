@@ -8,7 +8,7 @@ use meow::{
     style::{Color, Stylize},
 };
 
-use crate::github::{self, IssueComment};
+use crate::github::{self, events};
 
 use super::events::EventTimeline;
 
@@ -39,7 +39,7 @@ impl From<github::Issue> for IssueView {
             .push(spans![state, " ", issue.meta.title, " ", number])
             .push(Line::horizontal().blank())
             .push(EventTimeline::new(
-                std::iter::once(github::events::Event::Commented(IssueComment {
+                std::iter::once(Event::Commented(events::Comment {
                     author: issue.meta.author,
                     body: Some(issue.meta.body),
                 }))

@@ -8,7 +8,10 @@ use meow::{
     style::{Color, Stylize},
 };
 
-use crate::github::{self, IssueComment};
+use crate::github::{
+    self,
+    events::{self, Event},
+};
 
 use super::events::EventTimeline;
 
@@ -37,7 +40,7 @@ impl From<github::PullRequest> for PullRequestView {
             .push(spans![state, " ", pr.meta.title, " ", number])
             .push(Line::horizontal().blank())
             .push(EventTimeline::new(
-                std::iter::once(github::events::Event::Commented(IssueComment {
+                std::iter::once(Event::Commented(events::Comment {
                     author: pr.meta.author,
                     body: Some(pr.meta.body),
                 }))
@@ -67,7 +70,10 @@ impl Component for PullRequestView {
         match event {
             key!('q') => Some(PullRequestViewMsg::CloseView),
             key!('o') => Some(PullRequestViewMsg::OpenInBrowser),
-            _ => self.body.event_to_msg(event).map(PullRequestViewMsg::Scroll),
+            _ => self
+                .body
+                .event_to_msg(event)
+                .map(PullRequestViewMsg::Scroll),
         }
     }
 
@@ -78,4 +84,3 @@ impl Component for PullRequestView {
         }
     }
 }
-

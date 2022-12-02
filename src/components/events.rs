@@ -22,16 +22,12 @@ impl EventTimeline {
     pub fn new(events: impl IntoIterator<Item = Event>) -> Self {
         let mut layout = Layout::vertical();
         for event in events {
-            if let github::events::Event::Unknown = event {
-                continue;
-            }
+            let renderable: Box<dyn Renderable> = match event {
+                Event::Commented(comment) => Box::new(Comment::from(comment)),
+                Event::Unknown => Box::new("Unknown event".bg(Color::Red).fg(Color::Black)),
+            };
 
-            layout
-                .push(Container::new(match event {
-                    github::events::Event::Commented(comment) => Comment::from(comment),
-                    github::events::Event::Unknown => unreachable!(),
-                }))
-                .push(Line::horizontal().blank());
+            layout.push(renderable).push(Line::horizontal().blank());
         }
 
         Self { events: layout }
@@ -75,8 +71,8 @@ impl Comment {
     }
 }
 
-impl From<github::IssueComment> for Comment {
-    fn from(c: github::IssueComment) -> Self {
+impl From<github::events::Comment> for Comment {
+    fn from(c: github::events::Comment) -> Self {
         Self::new(
             c.body.unwrap_or_else(|| "No description provided.".into()),
             c.author.name,

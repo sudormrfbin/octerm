@@ -1,7 +1,7 @@
 use meow::{components::Component, App, Cmd};
 use octerm::{
     components::{IssueView, IssueViewMsg},
-    github::{self, User},
+    github::{self, User, events},
 };
 
 enum Msg {
@@ -71,7 +71,7 @@ It is not clear from this prompt that one of them goes to the middle click clipb
             state: github::IssueState::Open,
         },
         events: vec![
-            github::events::Event::Commented(github::IssueComment {
+            github::events::Event::Commented(events::Comment {
                 author: User::new("issue-author"),
                 body: Some(r#"As a workaround you can specify a config for the lsp in the languaguages.toml. 
 Example:
@@ -88,13 +88,13 @@ config = {metals.ammoniteJvmProperties = ["-Xmx1G"]}
 ```
 "#.into()),
                 }),
-            github::events::Event::Commented(github::IssueComment {
+            github::events::Event::Commented(events::Comment {
                 author: User::new("replier"),
                 body: Some("Just a heads up, we've fixed this in Metals.\
 You can test with the latest snapshot to see this working `0.11.9+128-92db24b7-SNAPSHOT`.\
 ".into()),
                 }),
-            github::events::Event::Commented(github::IssueComment {
+            github::events::Event::Commented(events::Comment {
                 author: User::new("issue-author"),
                 body: Some(r#"As a workaround you can specify a config for the lsp in the languaguages.toml. 
 Example:

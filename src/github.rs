@@ -229,22 +229,6 @@ impl Display for IssueState {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct IssueComment {
-    #[serde(rename = "user")]
-    pub author: User,
-    pub body: Option<String>,
-}
-
-impl From<octocrab::models::issues::Comment> for IssueComment {
-    fn from(c: octocrab::models::issues::Comment) -> Self {
-        IssueComment {
-            author: c.user.into(),
-            body: c.body,
-        }
-    }
-}
-
 pub struct Issue {
     pub meta: IssueMeta,
     pub events: Vec<Event>,
