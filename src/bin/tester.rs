@@ -67,7 +67,7 @@ fn fake_issue() -> github::Issue {
 It is not clear from this prompt that one of them goes to the middle click clipboard yet the other one goes to the normal (Ctrl+C/V) clipboard. Does anyone know what's the correct term for not only X (which I know are clipboard and primary) but also Wayland? (Maybe we just call them "system clipboard" and "system selection clipboard"? Also, the `joined and yanked 1 selections(s)` is unnecessary. Simply `yanked selection to system clipboard` would do.
 "#.into(),
             number: 1045,
-            author: "username".into(),
+            author: User::new("username"),
             state: github::IssueState::Open,
         },
         events: vec![

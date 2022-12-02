@@ -27,7 +27,10 @@ impl From<github::Issue> for IssueView {
         let number = format!("#{}", issue.meta.number).fg(Color::Gray);
         let state = match issue.meta.state {
             github::IssueState::Open => " Open ".bg(Color::Green),
-            github::IssueState::Closed => " Closed ".bg(Color::Red),
+            github::IssueState::Closed(reason) => " Closed ".bg(match reason {
+                github::IssueClosedReason::Completed => Color::Magenta,
+                github::IssueClosedReason::NotPlanned => Color::Red,
+            }),
         }
         .fg(Color::Black);
 
@@ -37,7 +40,7 @@ impl From<github::Issue> for IssueView {
             .push(Line::horizontal().blank())
             .push(Container::new(IssueComment::new(
                 issue.meta.body.into(),
-                issue.meta.author,
+                issue.meta.author.name,
             )));
 
         for event in issue.events {
@@ -108,11 +111,11 @@ impl IssueComment {
                     Line::horizontal().blank(),
                     Markdown::new(body.into()),
                 ])
-                    .top(false)
-                    .style(BorderStyle {
-                        style: Style::new().fg(header_bg),
-                        ..BorderStyle::outer_edge_aligned()
-                    }),
+                .top(false)
+                .style(BorderStyle {
+                    style: Style::new().fg(header_bg),
+                    ..BorderStyle::outer_edge_aligned()
+                }),
             );
         Self { body: layout }
     }

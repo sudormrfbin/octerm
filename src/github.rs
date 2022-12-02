@@ -2,7 +2,7 @@ pub mod events;
 
 use std::fmt::Display;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 
@@ -38,9 +38,13 @@ impl Notification {
                 ..
             }) => 80,
             NotificationTarget::Issue(IssueMeta {
-                state: IssueState::Closed,
+                state: IssueState::Closed(IssueClosedReason::NotPlanned),
                 ..
             }) => 70,
+            NotificationTarget::Issue(IssueMeta {
+                state: IssueState::Closed(IssueClosedReason::Completed),
+                ..
+            }) => 65,
             NotificationTarget::Discussion => 60,
             NotificationTarget::Issue(IssueMeta {
                 state: IssueState::Open,
@@ -77,8 +81,7 @@ impl Notification {
         };
         let target = match notif.subject.r#type.as_str() {
             "Issue" => {
-                let issue: octocrab::models::issues::Issue =
-                    octocrab::instance().get(url, None::<&()>).await?;
+                let issue: IssueDeserModel = octocrab::instance().get(url, None::<&()>).await?;
                 NotificationTarget::Issue(IssueMeta::new(issue, RepoMeta::from(&notif.repository)))
             }
             "PullRequest" => {
@@ -147,31 +150,44 @@ impl From<&octocrab::models::Repository> for RepoMeta {
     }
 }
 
+/// A struct used solely for deserializing json from calling the issue API.
+#[derive(Deserialize)]
+pub struct IssueDeserModel {
+    pub title: String,
+    pub number: usize,
+    pub body: Option<String>,
+    #[serde(rename = "user")]
+    pub author: User,
+    pub state: String,
+    pub state_reason: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct IssueMeta {
     pub repo: RepoMeta,
     pub title: String,
     pub body: String,
-    pub number: u64,
-    pub author: String,
+    pub number: usize,
+    pub author: User,
     pub state: IssueState,
 }
 
 impl IssueMeta {
-    pub fn new(issue: octocrab::models::issues::Issue, repo: RepoMeta) -> Self {
-        let state = match issue.closed_at {
-            Some(_) => IssueState::Closed,
-            None => IssueState::Open,
+    pub fn new(issue: IssueDeserModel, repo: RepoMeta) -> Self {
+        let state = match (issue.state.as_str(), issue.state_reason.as_deref()) {
+            ("open", _) => IssueState::Open,
+            ("closed", Some("completed")) => IssueState::Closed(IssueClosedReason::Completed),
+            ("closed", Some("not_planned")) => IssueState::Closed(IssueClosedReason::NotPlanned),
+            _ => IssueState::Closed(IssueClosedReason::NotPlanned),
         };
         Self {
             repo,
-            title: issue.title.clone(),
+            title: issue.title,
             body: issue
                 .body
-                .clone()
                 .unwrap_or_else(|| "No description provided.".to_string()),
-            number: issue.number.unsigned_abs(), // why is it even i64 in the first place?
-            author: issue.user.login.clone(),
+            number: issue.number,
+            author: issue.author,
             state,
         }
     }
@@ -181,7 +197,7 @@ impl IssueMeta {
     pub fn icon(&self) -> &'static str {
         match self.state {
             IssueState::Open => "",
-            IssueState::Closed => "",
+            IssueState::Closed(_) => "",
         }
     }
 }
@@ -189,7 +205,15 @@ impl IssueMeta {
 #[derive(Clone, PartialEq, Eq)]
 pub enum IssueState {
     Open,
-    Closed,
+    Closed(IssueClosedReason),
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub enum IssueClosedReason {
+    // Done, closed, fixed, resolved, etc.
+    Completed,
+    // Won't fix, duplicate stale, etc.
+    NotPlanned,
 }
 
 impl Display for IssueState {
@@ -199,7 +223,7 @@ impl Display for IssueState {
             "{}",
             match *self {
                 Self::Open => "Open",
-                Self::Closed => "Closed",
+                Self::Closed(_) => "Closed",
             }
         )
     }
@@ -328,7 +352,7 @@ impl From<octocrab::models::repos::Release> for ReleaseMeta {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct User {
     /// The username with which the user logs in; the @ name.
     #[serde(rename = "login")]
