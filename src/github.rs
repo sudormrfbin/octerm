@@ -261,8 +261,8 @@ pub struct PullRequestMeta {
     pub repo: RepoMeta,
     pub title: String,
     pub body: String,
-    pub unique: String,
-    pub author: String,
+    pub number: usize,
+    pub author: User,
     pub state: PullRequestState,
 }
 
@@ -282,8 +282,8 @@ impl PullRequestMeta {
                 .body
                 .clone()
                 .unwrap_or_else(|| "No description provided.".to_string()),
-            unique: pr.number.to_string(),
-            author: pr.user.clone().map(|u| u.login.clone()).unwrap_or_default(),
+            number: pr.number as usize,
+            author: pr.user.map(|u| User::from(*u)).unwrap_or_default(),
             state,
         }
     }
@@ -352,7 +352,7 @@ impl From<octocrab::models::repos::Release> for ReleaseMeta {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct User {
     /// The username with which the user logs in; the @ name.
     #[serde(rename = "login")]
@@ -368,5 +368,16 @@ impl User {
 impl From<octocrab::models::User> for User {
     fn from(u: octocrab::models::User) -> Self {
         Self { name: u.login }
+    }
+}
+
+pub struct PullRequest {
+    pub meta: PullRequestMeta,
+    pub events: Vec<Event>,
+}
+
+impl PullRequest {
+    pub fn new(meta: PullRequestMeta, events: Vec<Event>) -> Self {
+        Self { meta, events }
     }
 }

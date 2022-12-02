@@ -12,38 +12,36 @@ use crate::github::{self, IssueComment};
 
 use super::events::EventTimeline;
 
-pub enum IssueViewMsg {
+pub enum PullRequestViewMsg {
     Scroll(ScrollMsg),
     OpenInBrowser,
     CloseView,
 }
 
-pub struct IssueView {
+pub struct PullRequestView {
     body: Scroll<Layout<'static>>,
 }
 
-impl From<github::Issue> for IssueView {
-    fn from(issue: github::Issue) -> Self {
-        let number = format!("#{}", issue.meta.number).fg(Color::Gray);
-        let state = match issue.meta.state {
-            github::IssueState::Open => " Open ".bg(Color::Green),
-            github::IssueState::Closed(reason) => " Closed ".bg(match reason {
-                github::IssueClosedReason::Completed => Color::Magenta,
-                github::IssueClosedReason::NotPlanned => Color::Red,
-            }),
+impl From<github::PullRequest> for PullRequestView {
+    fn from(pr: github::PullRequest) -> Self {
+        let number = format!("#{}", pr.meta.number).fg(Color::Gray);
+        let state = match pr.meta.state {
+            github::PullRequestState::Open => " Open ".bg(Color::Green),
+            github::PullRequestState::Closed => " Closed ".bg(Color::Red),
+            github::PullRequestState::Merged => " Merged ".bg(Color::Magenta),
         }
         .fg(Color::Black);
 
         let mut layout = Layout::vertical().scrollable(true);
         layout
-            .push(spans![state, " ", issue.meta.title, " ", number])
+            .push(spans![state, " ", pr.meta.title, " ", number])
             .push(Line::horizontal().blank())
             .push(EventTimeline::new(
                 std::iter::once(github::events::Event::Commented(IssueComment {
-                    author: issue.meta.author,
-                    body: Some(issue.meta.body),
+                    author: pr.meta.author,
+                    body: Some(pr.meta.body),
                 }))
-                .chain(issue.events),
+                .chain(pr.events),
             ));
 
         Self {
@@ -52,7 +50,7 @@ impl From<github::Issue> for IssueView {
     }
 }
 
-impl Renderable for IssueView {
+impl Renderable for PullRequestView {
     fn render(&self, surface: &mut meow::Surface) {
         self.body.render(surface)
     }
@@ -62,21 +60,22 @@ impl Renderable for IssueView {
     }
 }
 
-impl Component for IssueView {
-    type Msg = IssueViewMsg;
+impl Component for PullRequestView {
+    type Msg = PullRequestViewMsg;
 
     fn event_to_msg(&self, event: meow::AppEvent) -> Option<Self::Msg> {
         match event {
-            key!('q') => Some(IssueViewMsg::CloseView),
-            key!('o') => Some(IssueViewMsg::OpenInBrowser),
-            _ => self.body.event_to_msg(event).map(IssueViewMsg::Scroll),
+            key!('q') => Some(PullRequestViewMsg::CloseView),
+            key!('o') => Some(PullRequestViewMsg::OpenInBrowser),
+            _ => self.body.event_to_msg(event).map(PullRequestViewMsg::Scroll),
         }
     }
 
     fn update<Request>(&mut self, msg: Self::Msg) -> meow::Cmd<Request> {
         match msg {
-            IssueViewMsg::Scroll(msg) => self.body.update(msg),
+            PullRequestViewMsg::Scroll(msg) => self.body.update(msg),
             _ => meow::Cmd::None,
         }
     }
 }
+

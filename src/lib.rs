@@ -5,8 +5,8 @@ pub mod markdown;
 pub mod network;
 pub mod util;
 
-use components::{release::ReleaseViewMsg, IssueViewMsg, NotificationsView, NotificationsViewMsg};
-use github::{Issue, IssueMeta};
+use components::{release::ReleaseViewMsg, IssueViewMsg, NotificationsView, NotificationsViewMsg, PullRequestViewMsg};
+use github::{Issue, IssueMeta, PullRequestMeta, PullRequest};
 use meow::{
     components::{line::Line, Component, Layout},
     key,
@@ -24,6 +24,7 @@ pub enum Msg {
 
     NotifViewMsg(NotificationsViewMsg),
     IssueViewMsg(IssueViewMsg),
+    PullRequestViewMsg(PullRequestViewMsg),
     ReleaseViewMsg(ReleaseViewMsg),
 }
 
@@ -36,6 +37,7 @@ impl FromResponse<ServerResponse> for Msg {
 pub enum Route {
     Notifications,
     Issue(components::IssueView),
+    PullRequest(components::PullRequestView),
     Release(components::ReleaseView),
 }
 
@@ -44,12 +46,14 @@ pub enum ServerRequest {
     OpenNotifInBrowser(Notification),
     MarkNotifAsRead(Notification),
     OpenIssue(IssueMeta),
+    OpenPullRequest(PullRequestMeta),
 }
 
 pub enum ServerResponse {
     Notifications(Vec<Notification>),
     MarkedNotifAsRead(Notification),
     Issue(Issue),
+    PullRequest(PullRequest),
     AsyncTaskStart,
     AsyncTaskDone,
     Error(Error),
@@ -77,6 +81,9 @@ impl Model {
                 match notif.target {
                     github::NotificationTarget::Issue(ref meta) => {
                         ServerRequest::OpenIssue(meta.clone()).into()
+                    }
+                    github::NotificationTarget::PullRequest(ref meta) => {
+                        ServerRequest::OpenPullRequest(meta.clone()).into()
                     }
                     github::NotificationTarget::Release(ref release) => {
                         self.route = Route::Release(release.clone().into());
@@ -110,6 +117,21 @@ impl Model {
         }
     }
 
+    fn update_pr_view_msg(&mut self, msg: PullRequestViewMsg) -> Cmd<ServerRequest> {
+        match msg {
+            PullRequestViewMsg::CloseView => {
+                self.route = Route::Notifications;
+                Cmd::None
+            }
+            PullRequestViewMsg::OpenInBrowser => {
+                ServerRequest::OpenNotifInBrowser(self.notifs.selected().clone()).into()
+            }
+            _ => match self.route {
+                Route::PullRequest(ref mut pr) => pr.update(msg),
+                _ => Cmd::None,
+            },
+        }
+    }
     fn update_release_view_msg(&mut self, msg: ReleaseViewMsg) -> Cmd<ServerRequest> {
         match msg {
             ReleaseViewMsg::CloseView => self.route = Route::Notifications,
@@ -149,6 +171,9 @@ impl Model {
             ServerResponse::Issue(issue) => {
                 self.route = Route::Issue(issue.into());
             }
+            ServerResponse::PullRequest(pr) => {
+                self.route = Route::PullRequest(pr.into());
+            }
         }
         Cmd::None
     }
@@ -179,6 +204,7 @@ impl App for OctermApp {
                 Route::Notifications => model.notifs.event_to_msg(event).map(Msg::NotifViewMsg),
                 Route::Issue(ref issue) => issue.event_to_msg(event).map(Msg::IssueViewMsg),
                 Route::Release(ref release) => release.event_to_msg(event).map(Msg::ReleaseViewMsg),
+                Route::PullRequest(ref pr) => pr.event_to_msg(event).map(Msg::PullRequestViewMsg),
             },
         }
     }
@@ -193,6 +219,7 @@ impl App for OctermApp {
             Msg::NotifViewMsg(msg) => model.update_notif_view_msg(msg),
             Msg::IssueViewMsg(msg) => model.update_issue_view_msg(msg),
             Msg::ReleaseViewMsg(msg) => model.update_release_view_msg(msg),
+            Msg::PullRequestViewMsg(msg) => model.update_pr_view_msg(msg),
             Msg::ServerResponse(resp) => model.update_in_response(resp),
         }
     }
@@ -217,6 +244,7 @@ impl App for OctermApp {
             Route::Notifications => column.push(&model.notifs),
             Route::Issue(ref issue) => column.push(issue),
             Route::Release(ref release) => column.push(release),
+            Route::PullRequest(ref pr) => column.push(pr),
         };
 
         column

@@ -6,7 +6,7 @@ use octocrab::{models::activity::Notification as OctoNotification, Page};
 use tokio::task::JoinHandle;
 
 use crate::error::{Error, Result};
-use crate::github::{self, Issue, IssueMeta, Notification};
+use crate::github::{self, Issue, IssueMeta, Notification, PullRequest, PullRequestMeta};
 use crate::{ServerRequest, ServerResponse};
 
 type Channel = ServerChannel<ServerRequest, ServerResponse>;
@@ -22,6 +22,7 @@ pub async fn start_server(channel: Channel) {
             ServerRequest::OpenNotifInBrowser(n) => open_in_browser(n).await,
             ServerRequest::MarkNotifAsRead(n) => mark_as_read(send, n).await,
             ServerRequest::OpenIssue(issue) => open_issue(issue, send).await,
+            ServerRequest::OpenPullRequest(pr) => open_pr(pr, send).await,
         };
         send(ServerResponse::AsyncTaskDone);
 
@@ -31,23 +32,20 @@ pub async fn start_server(channel: Channel) {
     }
 }
 
-async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<()> {
-    let events = octocrab::instance()
-        .get::<Page<github::events::Event>, String, TimelineParams>(
-            format!(
-                "repos/{owner}/{repo}/issues/{number}/timeline",
-                owner = issue.repo.owner.clone(),
-                repo = issue.repo.name.clone(),
-                number = issue.number,
-            ),
-            Some(&TimelineParams {
-                per_page: Some(100),
-                page: None,
-            }),
-        )
-        .await?
-        .take_items();
+async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<()> {
+    let events = issue_timeline(pr.repo.owner.clone(), pr.repo.name.clone(), pr.number).await?;
+    send(ServerResponse::PullRequest(PullRequest::new(pr, events)));
 
+    Ok(())
+}
+
+async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<()> {
+    let events = issue_timeline(
+        issue.repo.owner.clone(),
+        issue.repo.name.clone(),
+        issue.number,
+    )
+    .await?;
     send(ServerResponse::Issue(Issue::new(issue, events)));
 
     Ok(())
@@ -178,6 +176,26 @@ pub async fn mark_as_read(send: impl Fn(ServerResponse), notif: Notification) ->
     send(ServerResponse::MarkedNotifAsRead(notif));
 
     Ok(())
+}
+
+/// Retrieve timeline events from an issue. Github considers every pull request
+/// to be an issue, so this function works with PRs too.
+async fn issue_timeline(
+    owner: String,
+    repo: String,
+    number: usize,
+) -> Result<Vec<github::events::Event>> {
+    let events = octocrab::instance()
+        .get::<Page<github::events::Event>, String, TimelineParams>(
+            format!("repos/{owner}/{repo}/issues/{number}/timeline",),
+            Some(&TimelineParams {
+                per_page: Some(100),
+                page: None,
+            }),
+        )
+        .await?
+        .take_items();
+    Ok(events)
 }
 
 /// Helper struct used to send the parameters for a issues timeline api call.
