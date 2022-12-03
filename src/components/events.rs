@@ -78,6 +78,17 @@ impl EventTimeline {
                     " label"
                 ]
                 .boxed(),
+                Event::Unlabeled {
+                    actor,
+                    label: Label { name, .. },
+                } => spans![
+                    "  ",
+                    actor.to_string(),
+                    " removed ",
+                    name.bold(true),
+                    " label"
+                ]
+                .boxed(),
                 Event::CrossReferenced { actor, source } => Text::new(vec![
                     spans!["  Cross referenced by ", actor.to_string(), " from"],
                     spans![

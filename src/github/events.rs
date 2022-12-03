@@ -22,6 +22,10 @@ pub enum Event {
         actor: User,
         label: Label,
     },
+    Unlabeled {
+        actor: User,
+        label: Label,
+    },
     // Only this event is kebab-cased in the response, probably a slip-up
     #[serde(rename = "cross-referenced")]
     CrossReferenced {
