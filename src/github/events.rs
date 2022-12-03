@@ -11,6 +11,10 @@ pub enum Event {
         #[serde(rename = "actor")]
         by: User,
     },
+    Closed {
+        #[serde(rename = "actor")]
+        by: User,
+    },
     #[serde(other)]
     Unknown,
 }

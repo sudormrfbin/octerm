@@ -2,6 +2,7 @@ use meow::{
     components::{
         border::{Border, BorderStyle},
         container::Container,
+        empty::Empty,
         line::Line,
         padding::Padding,
         Layout, Renderable,
@@ -22,12 +23,25 @@ pub struct EventTimeline {
 impl EventTimeline {
     pub fn new(events: impl IntoIterator<Item = Event>) -> Self {
         let mut layout = Layout::vertical();
+        let mut saw_merged_event = false;
+
         for event in events {
             let renderable: Box<dyn Renderable> = match event {
                 Event::Commented(comment) => Comment::from(comment).boxed(),
                 Event::Unknown => "Unknown event".bg(Color::Red).fg(Color::Black).boxed(),
-                Event::Merged { by } => format!(" Merged by {by} ")
-                    .bg(Color::Magenta)
+                Event::Merged { by } => {
+                    saw_merged_event = true;
+
+                    format!(" Merged by {by} ")
+                        .bg(Color::Purple)
+                        .fg(Color::Black)
+                        .boxed()
+                }
+                // Merge events seem to be followed by a redundant closed
+                // event, so filter it out if it's already merged.
+                Event::Closed { .. } if saw_merged_event => Empty.boxed(),
+                Event::Closed { by } => format!(" Closed by {by} ")
+                    .bg(Color::Red)
                     .fg(Color::Black)
                     .boxed(),
             };
