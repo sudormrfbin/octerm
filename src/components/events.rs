@@ -89,6 +89,9 @@ impl EventTimeline {
                     " label"
                 ]
                 .boxed(),
+                Event::MarkedAsDuplicate { actor } => {
+                    format!("  {actor} marked this as a duplicate").boxed()
+                }
                 Event::CrossReferenced { actor, source } => Text::new(vec![
                     spans!["  Cross referenced by ", actor.to_string(), " from"],
                     spans![
@@ -134,14 +137,12 @@ impl EventTimeline {
                     };
 
                     match body.filter(|b| !b.is_empty()) {
-                        Some(body) => {
-                            meow::column![
-                                state_text,
-                                Line::horizontal().blank(),
-                                Comment::new(body, actor),
-                            ]
-                            .boxed()
-                        }
+                        Some(body) => meow::column![
+                            state_text,
+                            Line::horizontal().blank(),
+                            Comment::new(body, actor),
+                        ]
+                        .boxed(),
                         None => state_text.boxed(),
                     }
                 }
