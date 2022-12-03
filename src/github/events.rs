@@ -53,6 +53,10 @@ pub enum Event {
     Reopened {
         actor: User,
     },
+    Renamed {
+        actor: User,
+        rename: RenameEvent,
+    },
     Mentioned,
     Subscribed,
     #[serde(other)]
@@ -94,4 +98,10 @@ pub enum ReviewState {
     Commented,
     ChangesRequested,
     Approved,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RenameEvent {
+    pub from: String,
+    pub to: String,
 }

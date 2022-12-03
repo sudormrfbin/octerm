@@ -14,7 +14,7 @@ use meow::{
 use crate::{
     github::{
         self,
-        events::{Event, Label, ReviewState},
+        events::{Event, Label, RenameEvent, ReviewState},
         User,
     },
     markdown::Markdown,
@@ -105,6 +105,15 @@ impl EventTimeline {
                     format!["  {actor} force-pushed the branch"].boxed()
                 }
                 Event::HeadRefDeleted { actor } => format!["  {actor} deleted the branch"].boxed(),
+                Event::Renamed {
+                    actor,
+                    rename: RenameEvent { from, to },
+                } => Text::new(vec![
+                    spans!["  ", actor.to_string(), " changed the title"],
+                    spans!["   ", from.strikethrough(true)],
+                    spans!["   ", to],
+                ])
+                .boxed(),
                 Event::Reviewed { state, actor, body } => {
                     let state_text = match state {
                         ReviewState::Commented => {
