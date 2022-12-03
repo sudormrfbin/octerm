@@ -31,7 +31,7 @@ impl From<github::PullRequest> for PullRequestView {
         let state = match pr.meta.state {
             github::PullRequestState::Open => " Open ".bg(Color::Green),
             github::PullRequestState::Closed => " Closed ".bg(Color::Red),
-            github::PullRequestState::Merged => " Merged ".bg(Color::Magenta),
+            github::PullRequestState::Merged => " Merged ".bg(Color::Purple),
         }
         .fg(Color::Black);
 

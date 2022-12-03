@@ -28,7 +28,7 @@ impl From<github::Issue> for IssueView {
         let state = match issue.meta.state {
             github::IssueState::Open => " Open ".bg(Color::Green),
             github::IssueState::Closed(reason) => " Closed ".bg(match reason {
-                github::IssueClosedReason::Completed => Color::Magenta,
+                github::IssueClosedReason::Completed => Color::Purple,
                 github::IssueClosedReason::NotPlanned => Color::Red,
             }),
         }

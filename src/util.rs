@@ -7,11 +7,11 @@ pub fn notif_target_color(target: &NotificationTarget) -> Color {
         NotificationTarget::Issue(ref issue) => match issue.state {
             IssueState::Open => Color::Green,
             IssueState::Closed(IssueClosedReason::NotPlanned) => Color::Red,
-            IssueState::Closed(IssueClosedReason::Completed) => Color::Magenta,
+            IssueState::Closed(IssueClosedReason::Completed) => Color::Purple,
         },
         NotificationTarget::PullRequest(ref pr) => match pr.state {
             PullRequestState::Open => Color::Green,
-            PullRequestState::Merged => Color::Magenta,
+            PullRequestState::Merged => Color::Purple,
             PullRequestState::Closed => Color::Red,
         },
         NotificationTarget::CiBuild => Color::Red,
