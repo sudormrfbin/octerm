@@ -34,10 +34,10 @@ impl EventTimeline {
             let renderable: Box<dyn Renderable> = match event {
                 Event::Commented(comment) => Comment::from(comment).boxed(),
                 Event::Unknown => "Unknown event".bg(Color::Red).fg(Color::Black).boxed(),
-                Event::Merged { by } => {
+                Event::Merged { actor } => {
                     saw_merged_event = true;
 
-                    format!("  Merged by {by} ")
+                    format!("  Merged by {actor} ")
                         .bg(Color::Purple)
                         .fg(Color::Black)
                         .boxed()
@@ -45,7 +45,7 @@ impl EventTimeline {
                 // Merge events seem to be followed by a redundant closed
                 // event, so filter it out if it's already merged.
                 Event::Closed { .. } if saw_merged_event => Empty.boxed(),
-                Event::Closed { by } => format!("  Closed by {by} ")
+                Event::Closed { actor } => format!("  Closed by {actor} ")
                     .bg(Color::Red)
                     .fg(Color::Black)
                     .boxed(),
@@ -54,9 +54,16 @@ impl EventTimeline {
                     format!("  {summary} ").boxed()
                 }
                 Event::Labeled {
-                    by,
+                    actor,
                     label: Label { name, .. },
-                } => spans!["  ", by.to_string(), " added ", name.bold(true), " label"].boxed(),
+                } => spans![
+                    "  ",
+                    actor.to_string(),
+                    " added ",
+                    name.bold(true),
+                    " label"
+                ]
+                .boxed(),
             };
 
             layout.push(renderable).push(Line::horizontal().blank());

@@ -8,19 +8,16 @@ use super::User;
 pub enum Event {
     Commented(Comment),
     Merged {
-        #[serde(rename = "actor")]
-        by: User,
+        actor: User,
     },
     Closed {
-        #[serde(rename = "actor")]
-        by: User,
+        actor: User,
     },
     Committed {
         message: String,
     },
     Labeled {
-        #[serde(rename = "actor")]
-        by: User,
+        actor: User,
         label: Label,
     },
     #[serde(other)]
