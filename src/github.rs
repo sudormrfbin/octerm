@@ -349,6 +349,13 @@ impl User {
     }
 }
 
+impl Display for User {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("@")?;
+        f.write_str(&self.name)
+    }
+}
+
 impl From<octocrab::models::User> for User {
     fn from(u: octocrab::models::User) -> Self {
         Self { name: u.login }

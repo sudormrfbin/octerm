@@ -12,6 +12,7 @@ use meow::{
 use crate::{
     github::{self, events::Event},
     markdown::Markdown,
+    util::Boxed,
 };
 
 pub struct EventTimeline {
@@ -23,8 +24,12 @@ impl EventTimeline {
         let mut layout = Layout::vertical();
         for event in events {
             let renderable: Box<dyn Renderable> = match event {
-                Event::Commented(comment) => Box::new(Comment::from(comment)),
-                Event::Unknown => Box::new("Unknown event".bg(Color::Red).fg(Color::Black)),
+                Event::Commented(comment) => Comment::from(comment).boxed(),
+                Event::Unknown => "Unknown event".bg(Color::Red).fg(Color::Black).boxed(),
+                Event::Merged { by } => format!(" Merged by {by} ")
+                    .bg(Color::Magenta)
+                    .fg(Color::Black)
+                    .boxed(),
             };
 
             layout.push(renderable).push(Line::horizontal().blank());

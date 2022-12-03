@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::User;
 
@@ -7,8 +7,12 @@ use super::User;
 #[serde(tag = "event")]
 pub enum Event {
     Commented(Comment),
+    Merged {
+        #[serde(rename = "actor")]
+        by: User,
+    },
     #[serde(other)]
-    Unknown
+    Unknown,
 }
 
 #[derive(Serialize, Deserialize)]
