@@ -33,28 +33,36 @@ impl EventTimeline {
         for event in events {
             let renderable: Box<dyn Renderable> = match event {
                 Event::Commented(comment) => Comment::from(comment).boxed(),
-                Event::Unknown => "Unknown event".bg(Color::Red).fg(Color::Black).boxed(),
-                Event::Merged { actor, commit_id } => {
+                Event::Unknown => "Unknown event".fg(Color::Red).italic(true).boxed(),
+                Event::Merged { actor, .. } => {
                     saw_merged_event = true;
-                    let sha = &commit_id[..8];
 
-                    format!("  {actor} merged {sha}")
-                        .bg(Color::Purple)
-                        .fg(Color::Black)
-                        .boxed()
+                    spans![
+                        "  ".fg(Color::Purple),
+                        " Merged ".bg(Color::Purple).fg(Color::Black),
+                        " by ",
+                        actor.to_string()
+                    ]
+                    .boxed()
                 }
                 // Merge events seem to be followed by a redundant closed
                 // event, so filter it out if it's already merged.
                 Event::Closed { .. } if saw_merged_event => continue,
                 // TODO: Use correct icon here based on PR/issue
-                Event::Closed { actor } => format!("  Closed by {actor} ")
-                    .bg(Color::Red)
-                    .fg(Color::Black)
-                    .boxed(),
-                Event::Reopened { actor } => format!("  Reopened by {actor}")
-                    .bg(Color::Green)
-                    .fg(Color::Black)
-                    .boxed(),
+                Event::Closed { actor } => spans![
+                    "  ".fg(Color::Red),
+                    " Closed ".bg(Color::Red).fg(Color::Black),
+                    " by ",
+                    actor.to_string()
+                ]
+                .boxed(),
+                Event::Reopened { actor } => spans![
+                    "  ".fg(Color::Green),
+                    " Reopened ".bg(Color::Green).fg(Color::Black),
+                    " by ",
+                    actor.to_string(),
+                ]
+                .boxed(),
                 Event::Committed { message } => {
                     let summary = message.lines().next().unwrap_or_default();
                     format!("  {summary} ").boxed()
@@ -86,27 +94,42 @@ impl EventTimeline {
                 Event::Reviewed { state, actor, body } => {
                     let state_text = match state {
                         ReviewState::Commented => {
-                            Container::new(format!("  {actor} reviewed changes "))
-                                .bg(Color::Gray)
-                                .fg(Color::White)
+                            spans!(
+                                "  ".fg(Color::Gray),
+                                actor.to_string(),
+                                " ",
+                                " reviewed ".bg(Color::Gray).fg(Color::White),
+                                " changes "
+                            )
                         }
                         ReviewState::Approved => {
-                            Container::new(format!("  {actor} approved these changes "))
-                                .bg(Color::Green)
-                                .fg(Color::Black)
+                            spans!(
+                                "  ".fg(Color::Green),
+                                actor.to_string(),
+                                " ",
+                                " approved ".bg(Color::Green).fg(Color::Black),
+                                " these changes "
+                            )
                         }
                         ReviewState::ChangesRequested => {
-                            Container::new(format!("  {actor} requested changes "))
-                                .fg(Color::Red)
-                                .bg(Color::Black)
+                            spans!(
+                                "  ".fg(Color::Red),
+                                actor.to_string(),
+                                " ",
+                                " requested ".bg(Color::Red).fg(Color::Black),
+                                " changes "
+                            )
                         }
                     };
 
                     match body.filter(|b| !b.is_empty()) {
                         Some(body) => {
-                            // Extend state_text till screen edge to line up with comment header
-                            meow::column![state_text.width(usize::MAX), Comment::new(body, actor),]
-                                .boxed()
+                            meow::column![
+                                state_text,
+                                Line::horizontal().blank(),
+                                Comment::new(body, actor),
+                            ]
+                            .boxed()
                         }
                         None => state_text.boxed(),
                     }
