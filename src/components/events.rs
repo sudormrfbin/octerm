@@ -10,7 +10,7 @@ use meow::{
 };
 
 use crate::{
-    github::{self, events::Event},
+    github::{self, events::Event, User},
     markdown::Markdown,
     util::Boxed,
 };
@@ -54,13 +54,13 @@ pub struct Comment {
 }
 
 impl Comment {
-    pub fn new(body: String, author: String) -> Self {
+    pub fn new(body: String, author: User) -> Self {
         let mut layout = Layout::vertical();
         let header_bg = Color::Blue;
         let header_fg = Color::Black;
         layout
             .push(
-                Container::new(format!(" @{}", author).bold(true))
+                Container::new(format!(" {}", author).bold(true))
                     .bg(header_bg)
                     .fg(header_fg),
             )
@@ -80,7 +80,7 @@ impl From<github::events::Comment> for Comment {
     fn from(c: github::events::Comment) -> Self {
         Self::new(
             c.body.unwrap_or_else(|| "No description provided.".into()),
-            c.author.name,
+            c.author,
         )
     }
 }
