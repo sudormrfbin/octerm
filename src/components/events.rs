@@ -74,7 +74,10 @@ impl EventTimeline {
                 ])
                 .boxed(),
                 Event::HeadRefForcePushed { actor } => {
-                    spans!["  ", actor.to_string(), " force-pushed the branch"].boxed()
+                    format!["  {actor} force-pushed the branch"].boxed()
+                }
+                Event::HeadRefDeleted { actor } => {
+                    format!["  {actor} deleted the branch"].boxed()
                 }
                 Event::Reviewed { state, actor, body } => {
                     let state_text = match state {
@@ -98,6 +101,11 @@ impl EventTimeline {
                         .boxed(),
                         None => state_text.boxed(),
                     }
+                }
+                Event::Connected { actor: _ } => {
+                    // TODO: Use correct nouns here (linked an issue/PR to close this issue/PR)
+                    // format!("  {actor} linked to another PR/issue").boxed()
+                    continue;
                 }
                 Event::Mentioned | Event::Subscribed => continue,
             };

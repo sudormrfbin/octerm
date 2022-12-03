@@ -29,11 +29,17 @@ pub enum Event {
     HeadRefForcePushed {
         actor: User,
     },
+    HeadRefDeleted {
+        actor: User,
+    },
     Reviewed {
         state: ReviewState,
         #[serde(rename = "user")]
         actor: User, // rename for consistency with other events
         body: Option<String>,
+    },
+    Connected {
+        actor: User,
     },
     Mentioned,
     Subscribed,
