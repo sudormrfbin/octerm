@@ -9,6 +9,8 @@ pub enum Event {
     Commented(Comment),
     Merged {
         actor: User,
+        /// The commit that was merged into the main branch
+        commit_id: String,
     },
     Closed {
         actor: User,

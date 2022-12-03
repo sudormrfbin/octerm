@@ -34,10 +34,11 @@ impl EventTimeline {
             let renderable: Box<dyn Renderable> = match event {
                 Event::Commented(comment) => Comment::from(comment).boxed(),
                 Event::Unknown => "Unknown event".bg(Color::Red).fg(Color::Black).boxed(),
-                Event::Merged { actor } => {
+                Event::Merged { actor, commit_id } => {
                     saw_merged_event = true;
+                    let sha = &commit_id[..8];
 
-                    format!("  Merged by {actor} ")
+                    format!("  {actor} merged {sha}")
                         .bg(Color::Purple)
                         .fg(Color::Black)
                         .boxed()
@@ -76,29 +77,32 @@ impl EventTimeline {
                 Event::HeadRefForcePushed { actor } => {
                     format!["  {actor} force-pushed the branch"].boxed()
                 }
-                Event::HeadRefDeleted { actor } => {
-                    format!["  {actor} deleted the branch"].boxed()
-                }
+                Event::HeadRefDeleted { actor } => format!["  {actor} deleted the branch"].boxed(),
                 Event::Reviewed { state, actor, body } => {
                     let state_text = match state {
-                        ReviewState::Commented => format!("  {actor} reviewed changes ")
-                            .bg(Color::Gray)
-                            .fg(Color::White),
-                        ReviewState::Approved => format!("  {actor} approved these changes ")
-                            .bg(Color::Green)
-                            .fg(Color::Black),
-                        ReviewState::ChangesRequested => format!("  {actor} requested changes ")
-                            .fg(Color::Red)
-                            .bg(Color::Black),
+                        ReviewState::Commented => {
+                            Container::new(format!("  {actor} reviewed changes "))
+                                .bg(Color::Gray)
+                                .fg(Color::White)
+                        }
+                        ReviewState::Approved => {
+                            Container::new(format!("  {actor} approved these changes "))
+                                .bg(Color::Green)
+                                .fg(Color::Black)
+                        }
+                        ReviewState::ChangesRequested => {
+                            Container::new(format!("  {actor} requested changes "))
+                                .fg(Color::Red)
+                                .bg(Color::Black)
+                        }
                     };
 
                     match body.filter(|b| !b.is_empty()) {
-                        Some(body) => meow::column![
-                            state_text,
-                            Line::horizontal().blank(),
-                            Comment::new(body, actor),
-                        ]
-                        .boxed(),
+                        Some(body) => {
+                            // Extend state_text till screen edge to line up with comment header
+                            meow::column![state_text.width(usize::MAX), Comment::new(body, actor),]
+                                .boxed()
+                        }
                         None => state_text.boxed(),
                     }
                 }
