@@ -73,6 +73,7 @@ impl EventTimeline {
                     ],
                 ])
                 .boxed(),
+                Event::Mentioned | Event::Subscribed => continue,
             };
 
             layout.push(renderable).push(Line::horizontal().blank());

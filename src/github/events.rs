@@ -24,6 +24,8 @@ pub enum Event {
         actor: User,
         source: CrossReferenceSource,
     },
+    Mentioned,
+    Subscribed,
     #[serde(other)]
     Unknown,
 }
