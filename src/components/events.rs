@@ -14,7 +14,7 @@ use meow::{
 use crate::{
     github::{
         self,
-        events::{Event, Label},
+        events::{Event, Label, ReviewState},
         User,
     },
     markdown::Markdown,
@@ -75,6 +75,29 @@ impl EventTimeline {
                 .boxed(),
                 Event::HeadRefForcePushed { actor } => {
                     spans!["  ", actor.to_string(), " force-pushed the branch"].boxed()
+                }
+                Event::Reviewed { state, actor, body } => {
+                    let state_text = match state {
+                        ReviewState::Commented => format!("  {actor} reviewed changes ")
+                            .bg(Color::Gray)
+                            .fg(Color::White),
+                        ReviewState::Approved => format!("  {actor} approved these changes ")
+                            .bg(Color::Green)
+                            .fg(Color::Black),
+                        ReviewState::ChangesRequested => format!("  {actor} requested changes ")
+                            .fg(Color::Red)
+                            .bg(Color::Black),
+                    };
+
+                    match body.filter(|b| !b.is_empty()) {
+                        Some(body) => meow::column![
+                            state_text,
+                            Line::horizontal().blank(),
+                            Comment::new(body, actor),
+                        ]
+                        .boxed(),
+                        None => state_text.boxed(),
+                    }
                 }
                 Event::Mentioned | Event::Subscribed => continue,
             };

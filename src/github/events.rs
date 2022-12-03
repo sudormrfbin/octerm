@@ -29,6 +29,12 @@ pub enum Event {
     HeadRefForcePushed {
         actor: User,
     },
+    Reviewed {
+        state: ReviewState,
+        #[serde(rename = "user")]
+        actor: User, // rename for consistency with other events
+        body: Option<String>,
+    },
     Mentioned,
     Subscribed,
     #[serde(other)]
@@ -62,4 +68,12 @@ pub struct Label {
 pub struct CrossReferenceSource {
     pub r#type: String,
     pub issue: IssueDeserModel,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewState {
+    Commented,
+    ChangesRequested,
+    Approved,
 }
