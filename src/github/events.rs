@@ -43,6 +43,9 @@ pub enum Event {
     Connected {
         actor: User,
     },
+    Reopened {
+        actor: User,
+    },
     Mentioned,
     Subscribed,
     #[serde(other)]

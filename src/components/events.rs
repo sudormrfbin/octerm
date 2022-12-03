@@ -46,8 +46,13 @@ impl EventTimeline {
                 // Merge events seem to be followed by a redundant closed
                 // event, so filter it out if it's already merged.
                 Event::Closed { .. } if saw_merged_event => continue,
+                // TODO: Use correct icon here based on PR/issue
                 Event::Closed { actor } => format!("  Closed by {actor} ")
                     .bg(Color::Red)
+                    .fg(Color::Black)
+                    .boxed(),
+                Event::Reopened { actor } => format!("  Reopened by {actor}")
+                    .bg(Color::Green)
                     .fg(Color::Black)
                     .boxed(),
                 Event::Committed { message } => {
