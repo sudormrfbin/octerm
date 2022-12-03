@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use super::{User, IssueDeserModel};
+use super::{IssueDeserModel, User};
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "snake_case")]
 #[serde(tag = "event")]
 pub enum Event {
     Commented(Comment),
@@ -20,9 +20,14 @@ pub enum Event {
         actor: User,
         label: Label,
     },
+    // Only this event is kebab-cased in the response, probably a slip-up
+    #[serde(rename = "cross-referenced")]
     CrossReferenced {
         actor: User,
         source: CrossReferenceSource,
+    },
+    HeadRefForcePushed {
+        actor: User,
     },
     Mentioned,
     Subscribed,

@@ -73,6 +73,9 @@ impl EventTimeline {
                     ],
                 ])
                 .boxed(),
+                Event::HeadRefForcePushed { actor } => {
+                    spans!["  ", actor.to_string(), " force-pushed the branch"].boxed()
+                }
                 Event::Mentioned | Event::Subscribed => continue,
             };
 
