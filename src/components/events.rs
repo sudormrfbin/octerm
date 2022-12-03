@@ -2,9 +2,9 @@ use meow::{
     components::{
         border::{Border, BorderStyle},
         container::Container,
-        empty::Empty,
         line::Line,
         padding::Padding,
+        text::Text,
         Layout, Renderable,
     },
     spans,
@@ -44,7 +44,7 @@ impl EventTimeline {
                 }
                 // Merge events seem to be followed by a redundant closed
                 // event, so filter it out if it's already merged.
-                Event::Closed { .. } if saw_merged_event => Empty.boxed(),
+                Event::Closed { .. } if saw_merged_event => continue,
                 Event::Closed { actor } => format!("  Closed by {actor} ")
                     .bg(Color::Red)
                     .fg(Color::Black)
@@ -63,6 +63,15 @@ impl EventTimeline {
                     name.bold(true),
                     " label"
                 ]
+                .boxed(),
+                Event::CrossReferenced { actor, source } => Text::new(vec![
+                    spans!["  Cross referenced by ", actor.to_string(), " from"],
+                    spans![
+                        "   ",
+                        source.issue.title.underline(meow::style::Underline::Single),
+                        format!(" #{}", source.issue.number).fg(Color::Gray)
+                    ],
+                ])
                 .boxed(),
             };
 

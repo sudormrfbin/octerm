@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::User;
+use super::{User, IssueDeserModel};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -19,6 +19,10 @@ pub enum Event {
     Labeled {
         actor: User,
         label: Label,
+    },
+    CrossReferenced {
+        actor: User,
+        source: CrossReferenceSource,
     },
     #[serde(other)]
     Unknown,
@@ -45,4 +49,10 @@ pub struct Label {
     pub name: String,
     /// Hex color, eg. `FBCA04`
     pub color: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CrossReferenceSource {
+    pub r#type: String,
+    pub issue: IssueDeserModel,
 }

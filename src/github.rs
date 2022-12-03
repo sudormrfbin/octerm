@@ -151,7 +151,7 @@ impl From<&octocrab::models::Repository> for RepoMeta {
 }
 
 /// A struct used solely for deserializing json from calling the issue API.
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct IssueDeserModel {
     pub title: String,
     pub number: usize,
