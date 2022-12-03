@@ -92,6 +92,9 @@ impl EventTimeline {
                 Event::MarkedAsDuplicate { actor } => {
                     format!("  {actor} marked this as a duplicate").boxed()
                 }
+                Event::UnmarkedAsDuplicate { actor } => {
+                    format!("  {actor} marked this as not a duplicate").boxed()
+                }
                 Event::CrossReferenced { actor, source } => Text::new(vec![
                     spans!["  Cross referenced by ", actor.to_string(), " from"],
                     spans![
