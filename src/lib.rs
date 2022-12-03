@@ -5,13 +5,15 @@ pub mod markdown;
 pub mod network;
 pub mod util;
 
-use components::{release::ReleaseViewMsg, IssueViewMsg, NotificationsView, NotificationsViewMsg, PullRequestViewMsg};
-use github::{Issue, IssueMeta, PullRequestMeta, PullRequest};
+use components::{
+    release::ReleaseViewMsg, IssueViewMsg, NotificationsView, NotificationsViewMsg,
+    PullRequestViewMsg,
+};
+use github::{Issue, IssueMeta, NotificationTarget, PullRequest, PullRequestMeta};
 use meow::{
-    components::{line::Line, Component, Layout},
+    components::{container::Container, empty::Empty, line::Line, Component, Layout},
     key,
     layout::Constraint,
-    spans,
     style::{Color, Stylize},
     App, Cmd, FromResponse,
 };
@@ -179,6 +181,75 @@ impl Model {
     }
 }
 
+impl Model {
+    fn statusline(&self) -> Layout<'_> {
+        let mut statusline = Layout::horizontal();
+
+        if let Some(ref err) = self.error {
+            statusline.push(err.to_string().fg(Color::Red));
+            return statusline;
+        }
+
+        match self.route {
+            Route::Notifications => {
+                let header = format!(" Notifications • {} ", self.notifs.list.value().len())
+                    .bg(Color::Blue)
+                    .fg(Color::Black);
+                statusline.push(header);
+            }
+            Route::Issue(_) => {
+                if let Notification {
+                    target: target @ NotificationTarget::Issue(issue),
+                    ..
+                } = self.notifs.selected()
+                {
+                    let header = format!(
+                        " {icon} #{number} ",
+                        icon = issue.icon(),
+                        number = issue.number
+                    )
+                    .bg(util::notif_target_color(target))
+                    .fg(Color::Black);
+                    statusline.push(header).push(" ").push(&issue.title);
+                }
+            }
+            Route::PullRequest(_) => {
+                if let Notification {
+                    target: target @ NotificationTarget::PullRequest(pr),
+                    ..
+                } = self.notifs.selected()
+                {
+                    let header =
+                        format!(" {icon} #{number} ", icon = pr.icon(), number = pr.number)
+                            .bg(util::notif_target_color(target))
+                            .fg(Color::Black);
+                    statusline.push(header).push(" ").push(&pr.title);
+                }
+            }
+            Route::Release(_) => {
+                if let Notification {
+                    target: target @ NotificationTarget::Release(rel),
+                    ..
+                } = self.notifs.selected()
+                {
+                    let header = format!(" {icon} #{tag} ", icon = rel.icon(), tag = rel.tag_name)
+                        .bg(util::notif_target_color(target))
+                        .fg(Color::Black);
+                    statusline.push(header);
+                }
+            }
+        };
+
+        if self.async_task_doing {
+            statusline
+                .push_constrained(Empty, Constraint::weak().gte().length(0))
+                .push_constrained("Loading...", Constraint::strong().eq().length(10));
+        }
+
+        statusline
+    }
+}
+
 pub struct OctermApp {}
 
 impl App for OctermApp {
@@ -226,20 +297,6 @@ impl App for OctermApp {
 
     fn view<'m>(model: &'m Self::Model) -> Box<dyn meow::components::Renderable + 'm> {
         let mut column = Layout::vertical();
-        let mut status_line = spans![model
-            .error
-            .as_ref()
-            .map(|e| e.to_string())
-            .unwrap_or_default()
-            .fg(Color::Red)];
-
-        if model.async_task_doing {
-            match status_line.0.len() {
-                0 => status_line.0.push("Loading...".into()),
-                _ => status_line.0.insert(0, "Loading... | ".into()),
-            }
-        }
-
         match model.route {
             Route::Notifications => column.push(&model.notifs),
             Route::Issue(ref issue) => column.push(issue),
@@ -247,12 +304,16 @@ impl App for OctermApp {
             Route::PullRequest(ref pr) => column.push(pr),
         };
 
+        let statusline = Container::new(model.statusline())
+            .bg(Color::BrightWhite)
+            .fg(Color::Black);
+
         column
             .push_constrained(
                 Line::horizontal().blank(),
                 Constraint::weak().gte().length(0),
             )
-            .push_constrained(status_line, Constraint::strong().eq().length(1));
+            .push_constrained(statusline, Constraint::strong().eq().length(1));
 
         Box::new(column)
     }
