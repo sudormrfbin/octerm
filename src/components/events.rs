@@ -7,11 +7,16 @@ use meow::{
         padding::Padding,
         Layout, Renderable,
     },
+    spans,
     style::{Color, Style, Stylize},
 };
 
 use crate::{
-    github::{self, events::Event, User},
+    github::{
+        self,
+        events::{Event, Label},
+        User,
+    },
     markdown::Markdown,
     util::Boxed,
 };
@@ -32,7 +37,7 @@ impl EventTimeline {
                 Event::Merged { by } => {
                     saw_merged_event = true;
 
-                    format!(" Merged by {by} ")
+                    format!("  Merged by {by} ")
                         .bg(Color::Purple)
                         .fg(Color::Black)
                         .boxed()
@@ -40,10 +45,18 @@ impl EventTimeline {
                 // Merge events seem to be followed by a redundant closed
                 // event, so filter it out if it's already merged.
                 Event::Closed { .. } if saw_merged_event => Empty.boxed(),
-                Event::Closed { by } => format!(" Closed by {by} ")
+                Event::Closed { by } => format!("  Closed by {by} ")
                     .bg(Color::Red)
                     .fg(Color::Black)
                     .boxed(),
+                Event::Committed { message } => {
+                    let summary = message.lines().next().unwrap_or_default();
+                    format!("  {summary} ").boxed()
+                }
+                Event::Labeled {
+                    by,
+                    label: Label { name, .. },
+                } => spans!["  ", by.to_string(), " added ", name.bold(true), " label"].boxed(),
             };
 
             layout.push(renderable).push(Line::horizontal().blank());

@@ -15,6 +15,14 @@ pub enum Event {
         #[serde(rename = "actor")]
         by: User,
     },
+    Committed {
+        message: String,
+    },
+    Labeled {
+        #[serde(rename = "actor")]
+        by: User,
+        label: Label,
+    },
     #[serde(other)]
     Unknown,
 }
@@ -33,4 +41,11 @@ impl From<octocrab::models::issues::Comment> for Comment {
             body: c.body,
         }
     }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Label {
+    pub name: String,
+    /// Hex color, eg. `FBCA04`
+    pub color: String,
 }
