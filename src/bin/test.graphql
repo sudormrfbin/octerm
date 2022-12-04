@@ -1,0 +1,64 @@
+query TestQuery($owner: String!, $repo: String!, $number: Int!) {
+  repository(name: $repo, owner: $owner) {
+    issue(number: $number) {
+      closed
+      state
+      stateReason
+      title
+      body
+      timelineItems(first: 100) {
+        edges {
+          node {
+            __typename
+            ... on ClosedEvent {
+              id
+              actor {
+                __typename
+                login
+              }
+              closer {
+                __typename
+                ... on PullRequest {
+                  id
+                  number
+                }
+              }
+            }
+            ... on ConnectedEvent {
+              id
+            }
+            ... on CrossReferencedEvent {
+              id
+              source {
+                __typename
+                ... on PullRequest {
+                  id
+                  title
+                  number
+                }
+              }
+            }
+            ... on IssueComment {
+              id
+              author {
+                __typename
+                login
+              }
+              body
+            }
+            ... on LabeledEvent {
+              id
+              actor {
+                __typename
+                login
+              }
+              label {
+                name
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
