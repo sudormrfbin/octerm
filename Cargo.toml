@@ -20,4 +20,3 @@ meow-tui = { path = "../meow" }
 serde = { version = "1", features = ["derive"] }
 graphql_client = "0.11.0"
 chrono = "0.4.23"
-cynic = "2.2.1"
