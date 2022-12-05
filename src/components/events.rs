@@ -37,7 +37,10 @@ impl EventTimeline {
                 }
                 Event::Commented(comment) => Comment::from(comment).boxed(),
                 Event::Unknown => "Unknown event".fg(Color::Red).italic(true).boxed(),
-                Event::Merged { actor, commit_id } => {
+                Event::Merged {
+                    actor,
+                    commit_id: _,
+                } => {
                     saw_merged_event = true;
 
                     spans![
@@ -125,7 +128,7 @@ impl EventTimeline {
                     format!("  {actor} marked this as not a duplicate").boxed()
                 }
                 Event::CrossReferenced { actor, source } => Text::new(vec![
-                    spans!["  Cross referenced by ", actor.to_string(), " from"],
+                    spans!["  Cross referenced by ", actor.to_string(), " from"],
                     spans![
                         "   ",
                         source
@@ -194,7 +197,9 @@ impl EventTimeline {
                         github::events::IssueOrPullRequest::Issue { .. } => "issue",
                     };
                     Text::new(vec![
-                        spans!["  {actor} linked a {source_typ} that will close this"],
+                        spans![format!(
+                            "  {actor} linked a {source_typ} that will close this"
+                        )],
                         spans![
                             "   ",
                             source
@@ -206,7 +211,7 @@ impl EventTimeline {
                     ])
                     .boxed()
                 }
-                Event::Locked { actor, reason } => {
+                Event::Locked { actor, reason: _ } => {
                     format!("  {actor} locked and limited conversation to collaborators").boxed()
                 }
                 Event::Milestoned { actor, title } => {
@@ -224,7 +229,18 @@ impl EventTimeline {
                     actor,
                     commit_msg_summary,
                     cross_repository,
-                } => continue,
+                } => {
+                    let repo_name = match cross_repository {
+                        Some(repo) => format!(" to {}/{} ", repo.owner, repo.name),
+                        None => " ".to_string(),
+                    };
+                    let mut text = Vec::new();
+                    text.push(
+                        format!("  {actor} added a commit{repo_name}that referenced this").into(),
+                    );
+                    text.push(format!("   {commit_msg_summary}").into());
+                    Text::new(text).boxed()
+                }
                 Event::Mentioned | Event::Subscribed => continue,
             };
 
