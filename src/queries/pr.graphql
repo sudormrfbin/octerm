@@ -1,0 +1,394 @@
+query PullRequestTimelineQuery($owner: String!, $repo: String!, $number: Int!) {
+  repository(name: $repo, owner: $owner) {
+    pullRequest(number: $number) {
+      timelineItems(first: 100) {
+        edges {
+          node {
+            __typename
+            ... on AssignedEvent {
+              assignee {
+                __typename
+                ... on User {
+                  login
+                }
+                ... on Organization {
+                  login
+                }
+                ... on Mannequin {
+                  login
+                }
+                ... on Bot {
+                  login
+                }
+              }
+              createdAt
+              actor {
+                __typename
+                login
+              }
+            }
+            ... on ConnectedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              source {
+                __typename
+                ... on PullRequest {
+                  number
+                  title
+                }
+                ... on Issue {
+                  number
+                  title
+                }
+              }
+            }
+            ... on CrossReferencedEvent {
+              createdAt
+              source {
+                __typename
+                ... on PullRequest {
+                  title
+                  number
+                }
+                ... on Issue {
+                  number
+                  title
+                }
+              }
+              actor {
+                __typename
+                login
+              }
+            }
+            ... on IssueComment {
+              createdAt
+              author {
+                __typename
+                login
+              }
+              body
+            }
+            ... on LabeledEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              label {
+                name
+              }
+            }
+            ... on ClosedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              closer {
+                __typename
+                ... on PullRequest {
+                  number
+                }
+                ... on Commit {
+                  abbreviatedOid
+                }
+              }
+            }
+            ... on ConvertedToDiscussionEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              discussion {
+                number
+                title
+              }
+            }
+            ... on DemilestonedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              milestoneTitle
+            }
+            ... on LockedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              lockReason
+            }
+            ... on MarkedAsDuplicateEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              canonical {
+                __typename
+                ... on Issue {
+                  title
+                  number
+                }
+                ... on PullRequest {
+                  title
+                  number
+                }
+              }
+            }
+            ... on MilestonedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              milestoneTitle
+            }
+            ... on PinnedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+            }
+            ... on ReferencedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              isCrossRepository
+              commit {
+                messageHeadline
+              }
+              commitRepository {
+                name
+                owner {
+                  __typename
+                  login
+                }
+              }
+            }
+            ... on RenamedTitleEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              currentTitle
+              previousTitle
+            }
+            ... on ReopenedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+            }
+            ... on UnassignedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              assignee {
+                __typename
+                ... on User {
+                  login
+                }
+                ... on Organization {
+                  login
+                }
+                ... on Mannequin {
+                  login
+                }
+                ... on Bot {
+                  login
+                }
+              }
+            }
+            ... on UnlabeledEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              label {
+                name
+              }
+            }
+            ... on UnlockedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+            }
+            ... on UnmarkedAsDuplicateEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+            }
+            ... on UnpinnedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+            }
+            ... on ConvertToDraftEvent {
+              id
+              actor {
+                __typename
+                login
+              }
+            }
+            ... on HeadRefDeletedEvent {
+              id
+              headRefName
+              actor {
+                __typename
+                login
+              }
+              createdAt
+            }
+            ... on HeadRefForcePushedEvent {
+              id
+              actor {
+                __typename
+                login
+              }
+              createdAt
+              beforeCommit {
+                abbreviatedOid
+              }
+              afterCommit {
+                abbreviatedOid
+              }
+            }
+            ... on MergedEvent {
+              id
+              actor {
+                __typename
+                login
+              }
+              createdAt
+              mergeRefName
+            }
+            ... on PullRequestCommit {
+              id
+              commit {
+                abbreviatedOid
+                messageHeadline
+                author {
+                  __typename
+                  name
+                  user {
+                    login
+                  }
+                }
+                authoredByCommitter
+                committer {
+                  name
+                  user {
+                    __typename
+                    login
+                  }
+                }
+              }
+            }
+            ... on PullRequestReview {
+              id
+              author {
+                __typename
+                login
+              }
+              body
+              createdAt
+              state
+              comments(first: 100) {
+                edges {
+                  node {
+                    author {
+                      __typename
+                      login
+                    }
+                    body
+                    outdated
+                    state
+                    createdAt
+                    diffHunk
+                  }
+                }
+              }
+            }
+            ... on ReviewRequestRemovedEvent {
+              id
+              actor {
+                __typename
+                login
+              }
+              createdAt
+              requestedReviewer {
+                __typename
+                ... on Mannequin {
+                  login
+                }
+                ... on Team {
+                  name
+                }
+                ... on User {
+                  login
+                }
+              }
+            }
+            ... on ReviewRequestedEvent {
+              id
+              actor {
+                __typename
+                login
+              }
+              requestedReviewer {
+                __typename
+                ... on Mannequin {
+                  login
+                }
+                ... on Team {
+                  name
+                }
+                ... on User {
+                  login
+                }
+              }
+            }
+            ... on PullRequestReviewThread {
+              id
+              comments(first: 100) {
+                edges {
+                  node {
+                    body
+                  }
+                }
+              }
+            }
+            ... on ReadyForReviewEvent {
+              actor {
+                __typename
+                login
+              }
+              createdAt
+            }
+          }
+        }
+      }
+    }
+  }
+}

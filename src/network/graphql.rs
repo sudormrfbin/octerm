@@ -17,3 +17,11 @@ pub type DateTime = chrono::DateTime<chrono::Utc>;
     response_derives = "Debug"
 )]
 pub struct IssueTimelineQuery;
+
+#[derive(graphql_client::GraphQLQuery)]
+#[graphql(
+    schema_path = "schema.graphql",
+    query_path = "src/queries/pr.graphql",
+    response_derives = "Debug"
+)]
+pub struct PullRequestTimelineQuery;

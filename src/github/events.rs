@@ -8,8 +8,8 @@ pub enum Event {
     Commented(Comment),
     Merged {
         actor: User,
-        /// The commit that was merged into the main branch
-        commit_id: String,
+        /// The branch into which the PR was merged (main,master, etc)
+        base_branch: String,
     },
     Closed {
         actor: User,
@@ -18,7 +18,9 @@ pub enum Event {
         closer: Option<IssueCloser>,
     },
     Committed {
-        message: String,
+        message_headline: String,
+        abbreviated_oid: String,
+        author: User,
     },
     Labeled {
         actor: User,
@@ -41,9 +43,23 @@ pub enum Event {
     },
     HeadRefForcePushed {
         actor: User,
+        before_commit_abbr_oid: String,
+        after_commit_abbr_oid: String,
     },
     HeadRefDeleted {
         actor: User,
+        /// Deleted branch
+        branch: String,
+    },
+    MarkedAsDraft {
+        actor: User,
+    },
+    MarkedAsReadyForReview {
+        actor: User,
+    },
+    ReviewRequested {
+        actor: User,
+        requested_reviewer: User,
     },
     Reviewed {
         state: ReviewState,
@@ -117,15 +133,13 @@ pub struct Label {
     // pub color: String,
 }
 
-pub struct CrossReferenceSource {
-    pub r#type: String,
-    pub issue: IssueDeserModel,
-}
-
 pub enum ReviewState {
     Commented,
     ChangesRequested,
     Approved,
+    Dismissed,
+    Pending,
+    Other(String),
 }
 
 pub enum IssueCloser {

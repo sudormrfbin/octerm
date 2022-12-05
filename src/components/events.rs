@@ -37,17 +37,16 @@ impl EventTimeline {
                 }
                 Event::Commented(comment) => Comment::from(comment).boxed(),
                 Event::Unknown => "Unknown event".fg(Color::Red).italic(true).boxed(),
-                Event::Merged {
-                    actor,
-                    commit_id: _,
-                } => {
+                Event::Merged { actor, base_branch } => {
                     saw_merged_event = true;
 
                     spans![
                         "  ".fg(Color::Purple),
                         " Merged ".bg(Color::Purple).fg(Color::Black),
                         " by ",
-                        actor.to_string()
+                        actor.to_string(),
+                        " into ",
+                        base_branch,
                     ]
                     .boxed()
                 }
@@ -82,10 +81,11 @@ impl EventTimeline {
                     actor.to_string(),
                 ]
                 .boxed(),
-                Event::Committed { message } => {
-                    let summary = message.lines().next().unwrap_or_default();
-                    format!("  {summary} ").boxed()
-                }
+                Event::Committed {
+                    message_headline: message,
+                    abbreviated_oid,
+                    author: _,
+                } => spans!["  ", message, " ", abbreviated_oid.fg(Color::Gray)].boxed(),
                 Event::Labeled {
                     actor,
                     label: Label { name },
@@ -139,10 +139,22 @@ impl EventTimeline {
                     ],
                 ])
                 .boxed(),
-                Event::HeadRefForcePushed { actor } => {
-                    format!["  {actor} force-pushed the branch"].boxed()
+                Event::HeadRefForcePushed {
+                    actor,
+                    before_commit_abbr_oid: before,
+                    after_commit_abbr_oid: after,
+                } => spans![
+                    "  ",
+                    actor.to_string(),
+                    " force-pushed the branch from ",
+                    before.fg(Color::Gray),
+                    " to ",
+                    after.fg(Color::Gray)
+                ]
+                .boxed(),
+                Event::HeadRefDeleted { actor, branch } => {
+                    format!["  {actor} deleted the {branch} branch"].boxed()
                 }
-                Event::HeadRefDeleted { actor } => format!["  {actor} deleted the branch"].boxed(),
                 Event::Renamed { actor, from, to } => Text::new(vec![
                     spans!["  ", actor.to_string(), " changed the title"],
                     spans!["   ", from.strikethrough(true)],
@@ -178,6 +190,7 @@ impl EventTimeline {
                                 " changes "
                             )
                         }
+                        _ => spans![],
                     };
 
                     match body.filter(|b| !b.is_empty()) {
@@ -242,6 +255,17 @@ impl EventTimeline {
                     Text::new(text).boxed()
                 }
                 Event::Mentioned | Event::Subscribed => continue,
+
+                Event::MarkedAsDraft { actor } => {
+                    format!("  {actor} marked this pull request as draft").boxed()
+                }
+                Event::MarkedAsReadyForReview { actor } => {
+                    format!("  {actor} marked this pull request as ready for review").boxed()
+                }
+                Event::ReviewRequested {
+                    actor,
+                    requested_reviewer: reviewer,
+                } => format!("  {actor} requested a review from {reviewer}").boxed(),
             };
 
             layout.push(renderable).push(Line::horizontal().blank());
