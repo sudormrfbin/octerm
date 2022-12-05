@@ -1,0 +1,252 @@
+query IssueTimelineQuery($owner: String!, $repo: String!, $number: Int!) {
+  repository(name: $repo, owner: $owner) {
+    issue(number: $number) {
+      timelineItems(first: 100) {
+        edges {
+          node {
+            __typename
+            ... on AssignedEvent {
+              assignee {
+                __typename
+                ... on User {
+                  login
+                }
+                ... on Organization {
+                  login
+                }
+                ... on Mannequin {
+                  login
+                }
+                ... on Bot {
+                  login
+                }
+              }
+              createdAt
+              actor {
+                __typename
+                login
+              }
+            }
+            ... on ConnectedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              source {
+                __typename
+                ... on PullRequest {
+                  number
+                  title
+                }
+                ... on Issue {
+                  number
+                  title
+                }
+              }
+            }
+            ... on CrossReferencedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              source {
+                __typename
+                ... on PullRequest {
+                  title
+                  number
+                }
+                ... on Issue {
+                  number
+                  title
+                }
+              }
+            }
+            ... on IssueComment {
+              createdAt
+              author {
+                __typename
+                login
+              }
+              body
+            }
+            ... on LabeledEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              label {
+                name
+              }
+            }
+            ... on ClosedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              closer {
+                __typename
+                ... on PullRequest {
+                  number
+                }
+                ... on Commit {
+                  abbreviatedOid
+                }
+              }
+            }
+            ... on ConvertedToDiscussionEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              discussion {
+                number
+                title
+              }
+            }
+            ... on DemilestonedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              milestoneTitle
+            }
+            ... on LockedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              lockReason
+            }
+            ... on MarkedAsDuplicateEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              canonical {
+                __typename
+                ... on Issue {
+                  title
+                  number
+                }
+                ... on PullRequest {
+                  title
+                  number
+                }
+              }
+            }
+            ... on MilestonedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              milestoneTitle
+            }
+            ... on PinnedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+            }
+            ... on ReferencedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              isCrossRepository
+              commit {
+                messageHeadline
+              }
+              commitRepository {
+                name
+                owner {
+                  __typename
+                  login
+                }
+              }
+            }
+            ... on RenamedTitleEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              currentTitle
+              previousTitle
+            }
+            ... on ReopenedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+            }
+            ... on UnassignedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              assignee {
+                __typename
+                ... on User {
+                  login
+                }
+                ... on Organization {
+                  login
+                }
+                ... on Mannequin {
+                  login
+                }
+                ... on Bot {
+                  login
+                }
+              }
+            }
+            ... on UnlabeledEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+              label {
+                name
+              }
+            }
+            ... on UnlockedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+            }
+            ... on UnmarkedAsDuplicateEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+            }
+            ... on UnpinnedEvent {
+              createdAt
+              actor {
+                __typename
+                login
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

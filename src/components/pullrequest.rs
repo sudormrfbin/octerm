@@ -42,7 +42,7 @@ impl From<github::PullRequest> for PullRequestView {
             .push(EventTimeline::new(
                 std::iter::once(Event::Commented(events::Comment {
                     author: pr.meta.author,
-                    body: Some(pr.meta.body),
+                    body: pr.meta.body,
                 }))
                 .chain(pr.events),
             ));

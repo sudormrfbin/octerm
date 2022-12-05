@@ -11,6 +11,8 @@ pub enum Error {
     GitHub(#[source] octocrab::Error),
     #[error("github api rate limit exceeded")]
     GitHubRateLimitExceeded(#[source] octocrab::Error),
+    #[error("graphql error")]
+    Graphql(Vec<graphql_client::Error>),
     #[error("could not complete concurrent network requests")]
     NetworkTask,
     #[error("could not open browser")]

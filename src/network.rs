@@ -1,12 +1,15 @@
+pub mod graphql;
+
 use std::result::Result as StdResult;
 
+use graphql_client::GraphQLQuery;
 use meow::server::ServerChannel;
 
 use octocrab::{models::activity::Notification as OctoNotification, Page};
 use tokio::task::JoinHandle;
 
 use crate::error::{Error, Result};
-use crate::github::{self, Issue, IssueMeta, Notification, PullRequest, PullRequestMeta};
+use crate::github::{self, events, Issue, IssueMeta, Notification, PullRequest, PullRequestMeta};
 use crate::{ServerRequest, ServerResponse};
 
 type Channel = ServerChannel<ServerRequest, ServerResponse>;
@@ -33,19 +36,222 @@ pub async fn start_server(channel: Channel) {
 }
 
 async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<()> {
-    let events = issue_timeline(pr.repo.owner.clone(), pr.repo.name.clone(), pr.number).await?;
-    send(ServerResponse::PullRequest(PullRequest::new(pr, events)));
+    send(ServerResponse::PullRequest(PullRequest::new(
+        pr,
+        Vec::new(),
+    )));
 
     Ok(())
 }
 
 async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<()> {
-    let events = issue_timeline(
-        issue.repo.owner.clone(),
-        issue.repo.name.clone(),
-        issue.number,
-    )
-    .await?;
+    let query_vars = graphql::issue_timeline_query::Variables {
+        owner: issue.repo.owner.clone(),
+        repo: issue.repo.name.clone(),
+        number: issue.number as i64,
+    };
+
+    let query = graphql::IssueTimelineQuery::build_query(query_vars);
+    let response = octocrab::instance().post("graphql", Some(&query)).await?;
+    let data = graphql::response_to_result::<
+        <graphql::IssueTimelineQuery as GraphQLQuery>::ResponseData,
+    >(response)?;
+
+    let convert_to_events = move || -> Option<Vec<github::events::Event>> {
+        use github::events::Event;
+        use graphql::issue_timeline_query::*;
+        use IssueTimelineQueryRepositoryIssueTimelineItemsEdgesNode as TimelineEvent;
+        use IssueTimelineQueryRepositoryIssueTimelineItemsEdgesNodeOnAssignedEventAssignee as Assignee;
+        use IssueTimelineQueryRepositoryIssueTimelineItemsEdgesNodeOnClosedEventCloser as Closer;
+        use IssueTimelineQueryRepositoryIssueTimelineItemsEdgesNodeOnConnectedEventSource as ConnectedSource;
+        use IssueTimelineQueryRepositoryIssueTimelineItemsEdgesNodeOnCrossReferencedEventSource as CrossRefSource;
+        use IssueTimelineQueryRepositoryIssueTimelineItemsEdgesNodeOnMarkedAsDuplicateEventCanonical as DuplicateCanonical;
+        use IssueTimelineQueryRepositoryIssueTimelineItemsEdgesNodeOnUnassignedEventAssignee as Unassignee;
+
+        macro_rules! actor {
+            ($root:expr) => {
+                actor!($root, actor)
+            };
+            ($root:expr, $actor_token:ident) => {
+                $crate::github::User::from($root.$actor_token.map(|a| a.login).unwrap_or_default())
+            };
+        }
+
+        macro_rules! issue_or_pr {
+            ($var:expr, $gql_type:ident) => {
+                match $var {
+                    $gql_type::Issue(i) => $crate::github::events::IssueOrPullRequest::Issue {
+                        number: i.number as usize,
+                        title: i.title,
+                    },
+                    $gql_type::PullRequest(pr) => {
+                        $crate::github::events::IssueOrPullRequest::PullRequest {
+                            number: pr.number as usize,
+                            title: pr.title,
+                        }
+                    }
+                }
+            };
+        }
+
+        let events = data?
+            .repository?
+            .issue?
+            .timeline_items
+            .edges?
+            .into_iter()
+            .filter_map(|e| e?.node)
+            .map(|node| match node {
+                TimelineEvent::AddedToProjectEvent => Event::Unknown,
+                TimelineEvent::CommentDeletedEvent => Event::Unknown,
+                TimelineEvent::ConvertedNoteToIssueEvent => Event::Unknown,
+                TimelineEvent::ConvertedToDiscussionEvent(_) => Event::Unknown,
+                TimelineEvent::DemilestonedEvent(_) => Event::Unknown,
+                TimelineEvent::UnsubscribedEvent => Event::Unknown,
+                TimelineEvent::UserBlockedEvent => Event::Unknown,
+                TimelineEvent::TransferredEvent => Event::Unknown,
+                TimelineEvent::RemovedFromProjectEvent => Event::Unknown,
+                TimelineEvent::MovedColumnsInProjectEvent => Event::Unknown,
+                TimelineEvent::DisconnectedEvent => Event::Unknown,
+
+                TimelineEvent::AssignedEvent(assigned) => {
+                    let assignee = assigned
+                        .assignee
+                        .map(|a| match a {
+                            Assignee::Bot(b) => b.login,
+                            Assignee::Mannequin(m) => m.login,
+                            Assignee::Organization(o) => o.login,
+                            Assignee::User(u) => u.login,
+                        })
+                        .unwrap_or_default()
+                        .into();
+
+                    Event::Assigned {
+                        assignee,
+                        actor: actor!(assigned),
+                    }
+                }
+
+                TimelineEvent::ClosedEvent(closed) => {
+                    let closer = closed.closer.map(|c| match c {
+                        Closer::Commit(c) => c.abbreviated_oid.into(),
+                        Closer::PullRequest(pr) => pr.number.into(),
+                    });
+                    Event::Closed {
+                        actor: actor!(closed),
+                        closer,
+                    }
+                }
+
+                TimelineEvent::ConnectedEvent(connected) => Event::Connected {
+                    actor: actor!(connected),
+                    source: issue_or_pr!(connected.source, ConnectedSource),
+                },
+
+                TimelineEvent::CrossReferencedEvent(cross) => Event::CrossReferenced {
+                    actor: actor!(cross),
+                    source: issue_or_pr!(cross.source, CrossRefSource),
+                },
+                TimelineEvent::IssueComment(comment) => Event::Commented(events::Comment {
+                    author: actor!(comment, author),
+                    body: comment.body,
+                }),
+                TimelineEvent::LabeledEvent(labeled) => Event::Labeled {
+                    actor: actor!(labeled),
+                    label: events::Label {
+                        name: labeled.label.name,
+                    },
+                },
+
+                TimelineEvent::LockedEvent(locked) => {
+                    let reason = locked.lock_reason.map(|l| match l {
+                        LockReason::OFF_TOPIC => events::LockReason::OffTopic,
+                        LockReason::RESOLVED => events::LockReason::Resolved,
+                        LockReason::SPAM => events::LockReason::Spam,
+                        LockReason::TOO_HEATED => events::LockReason::TooHeated,
+                        LockReason::Other(s) => events::LockReason::Other(s),
+                    });
+                    Event::Locked {
+                        actor: actor!(locked),
+                        reason,
+                    }
+                }
+
+                TimelineEvent::MarkedAsDuplicateEvent(dup) => Event::MarkedAsDuplicate {
+                    actor: actor!(dup),
+                    original: dup.canonical.map(|c| issue_or_pr!(c, DuplicateCanonical)),
+                },
+                TimelineEvent::MilestonedEvent(milestone) => Event::Milestoned {
+                    actor: actor!(milestone),
+                    title: milestone.milestone_title,
+                },
+                TimelineEvent::PinnedEvent(pinned) => Event::Pinned {
+                    actor: actor!(pinned),
+                },
+
+                TimelineEvent::ReferencedEvent(refer) => {
+                    let repo = refer.is_cross_repository.then(|| events::Repository {
+                        name: refer.commit_repository.name,
+                        owner: refer.commit_repository.owner.login.into(),
+                    });
+                    let commit_msg = refer.commit.map(|c| c.message_headline).unwrap_or_default();
+                    Event::Referenced {
+                        actor: actor!(refer),
+                        commit_msg_summary: commit_msg,
+                        cross_repository: repo,
+                    }
+                }
+
+                TimelineEvent::RenamedTitleEvent(rename) => Event::Renamed {
+                    actor: actor!(rename),
+                    from: rename.previous_title,
+                    to: rename.current_title,
+                },
+                TimelineEvent::ReopenedEvent(reopen) => Event::Reopened {
+                    actor: actor!(reopen),
+                },
+
+                TimelineEvent::UnassignedEvent(unassigned) => {
+                    let unassignee = unassigned
+                        .assignee
+                        .map(|a| match a {
+                            Unassignee::Bot(b) => b.login,
+                            Unassignee::Mannequin(m) => m.login,
+                            Unassignee::Organization(o) => o.login,
+                            Unassignee::User(u) => u.login,
+                        })
+                        .unwrap_or_default()
+                        .into();
+                    Event::Unassigned {
+                        assignee: unassignee,
+                        actor: actor!(unassigned),
+                    }
+                }
+
+                TimelineEvent::UnlabeledEvent(unlabeled) => Event::Unlabeled {
+                    actor: actor!(unlabeled),
+                    label: events::Label {
+                        name: unlabeled.label.name,
+                    },
+                },
+                TimelineEvent::UnlockedEvent(unlock) => Event::Unlocked {
+                    actor: actor!(unlock),
+                },
+                TimelineEvent::UnmarkedAsDuplicateEvent(notdup) => Event::UnmarkedAsDuplicate {
+                    actor: actor!(notdup),
+                },
+                TimelineEvent::UnpinnedEvent(unpin) => Event::Unpinned {
+                    actor: actor!(unpin),
+                },
+                TimelineEvent::SubscribedEvent => Event::Subscribed,
+                TimelineEvent::MentionedEvent => Event::Mentioned,
+            })
+            .collect();
+
+        Some(events)
+    };
+
+    let events = convert_to_events().unwrap_or_default();
     send(ServerResponse::Issue(Issue::new(issue, events)));
 
     Ok(())
@@ -176,26 +382,6 @@ pub async fn mark_as_read(send: impl Fn(ServerResponse), notif: Notification) ->
     send(ServerResponse::MarkedNotifAsRead(notif));
 
     Ok(())
-}
-
-/// Retrieve timeline events from an issue. Github considers every pull request
-/// to be an issue, so this function works with PRs too.
-async fn issue_timeline(
-    owner: String,
-    repo: String,
-    number: usize,
-) -> Result<Vec<github::events::Event>> {
-    let events = octocrab::instance()
-        .get::<Page<github::events::Event>, String, TimelineParams>(
-            format!("repos/{owner}/{repo}/issues/{number}/timeline",),
-            Some(&TimelineParams {
-                per_page: Some(100),
-                page: None,
-            }),
-        )
-        .await?
-        .take_items();
-    Ok(events)
 }
 
 /// Helper struct used to send the parameters for a issues timeline api call.

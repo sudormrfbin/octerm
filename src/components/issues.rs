@@ -41,7 +41,7 @@ impl From<github::Issue> for IssueView {
             .push(EventTimeline::new(
                 std::iter::once(events::Event::Commented(events::Comment {
                     author: issue.meta.author,
-                    body: Some(issue.meta.body),
+                    body: issue.meta.body,
                 }))
                 .chain(issue.events),
             ));

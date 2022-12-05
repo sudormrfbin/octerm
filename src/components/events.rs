@@ -14,7 +14,7 @@ use meow::{
 use crate::{
     github::{
         self,
-        events::{Event, Label, RenameEvent, ReviewState},
+        events::{Event, Label, ReviewState},
         User,
     },
     markdown::Markdown,
@@ -32,9 +32,12 @@ impl EventTimeline {
 
         for event in events {
             let renderable: Box<dyn Renderable> = match event {
+                Event::Assigned { assignee, actor } => {
+                    format!("  {actor} assigned {assignee}").boxed()
+                }
                 Event::Commented(comment) => Comment::from(comment).boxed(),
                 Event::Unknown => "Unknown event".fg(Color::Red).italic(true).boxed(),
-                Event::Merged { actor, .. } => {
+                Event::Merged { actor, commit_id } => {
                     saw_merged_event = true;
 
                     spans![
@@ -49,13 +52,26 @@ impl EventTimeline {
                 // event, so filter it out if it's already merged.
                 Event::Closed { .. } if saw_merged_event => continue,
                 // TODO: Use correct icon here based on PR/issue
-                Event::Closed { actor } => spans![
-                    "  ".fg(Color::Red),
-                    " Closed ".bg(Color::Red).fg(Color::Black),
-                    " by ",
-                    actor.to_string()
-                ]
-                .boxed(),
+                Event::Closed { actor, closer } => {
+                    let mut spans = spans![
+                        "  ".fg(Color::Red),
+                        " Closed ".bg(Color::Red).fg(Color::Black),
+                        " by ",
+                        actor.to_string()
+                    ];
+                    if let Some(closer) = closer {
+                        let end = match closer {
+                            github::events::IssueCloser::Commit { abbr_oid } => {
+                                format!(" in {abbr_oid}")
+                            }
+                            github::events::IssueCloser::PullRequest { number } => {
+                                format!(" in #{number}")
+                            }
+                        };
+                        spans.0.push(end.into());
+                    }
+                    spans.boxed()
+                }
                 Event::Reopened { actor } => spans![
                     "  ".fg(Color::Green),
                     " Reopened ".bg(Color::Green).fg(Color::Black),
@@ -69,7 +85,7 @@ impl EventTimeline {
                 }
                 Event::Labeled {
                     actor,
-                    label: Label { name, .. },
+                    label: Label { name },
                 } => spans![
                     "  ",
                     actor.to_string(),
@@ -80,7 +96,7 @@ impl EventTimeline {
                 .boxed(),
                 Event::Unlabeled {
                     actor,
-                    label: Label { name, .. },
+                    label: Label { name },
                 } => spans![
                     "  ",
                     actor.to_string(),
@@ -89,8 +105,21 @@ impl EventTimeline {
                     " label"
                 ]
                 .boxed(),
-                Event::MarkedAsDuplicate { actor } => {
-                    format!("  {actor} marked this as a duplicate").boxed()
+                Event::MarkedAsDuplicate { actor, original } => {
+                    let (title, number) = original
+                        .as_ref()
+                        .map(|o| (o.title().to_string(), o.number()))
+                        .unwrap_or_default();
+
+                    Text::new(vec![
+                        spans!["  ", actor.to_string(), " marked this as a duplicate of"],
+                        spans![
+                            "   ",
+                            title.underline(meow::style::Underline::Single),
+                            format!(" #{}", number).fg(Color::Gray)
+                        ],
+                    ])
+                    .boxed()
                 }
                 Event::UnmarkedAsDuplicate { actor } => {
                     format!("  {actor} marked this as not a duplicate").boxed()
@@ -99,8 +128,11 @@ impl EventTimeline {
                     spans!["  Cross referenced by ", actor.to_string(), " from"],
                     spans![
                         "   ",
-                        source.issue.title.underline(meow::style::Underline::Single),
-                        format!(" #{}", source.issue.number).fg(Color::Gray)
+                        source
+                            .title()
+                            .to_string()
+                            .underline(meow::style::Underline::Single),
+                        format!(" #{}", source.number()).fg(Color::Gray)
                     ],
                 ])
                 .boxed(),
@@ -108,10 +140,7 @@ impl EventTimeline {
                     format!["  {actor} force-pushed the branch"].boxed()
                 }
                 Event::HeadRefDeleted { actor } => format!["  {actor} deleted the branch"].boxed(),
-                Event::Renamed {
-                    actor,
-                    rename: RenameEvent { from, to },
-                } => Text::new(vec![
+                Event::Renamed { actor, from, to } => Text::new(vec![
                     spans!["  ", actor.to_string(), " changed the title"],
                     spans!["   ", from.strikethrough(true)],
                     spans!["   ", to],
@@ -158,11 +187,44 @@ impl EventTimeline {
                         None => state_text.boxed(),
                     }
                 }
-                Event::Connected { actor: _ } => {
+                Event::Connected { actor, source } => {
                     // TODO: Use correct nouns here (linked an issue/PR to close this issue/PR)
-                    // format!("  {actor} linked to another PR/issue").boxed()
-                    continue;
+                    let source_typ = match source {
+                        github::events::IssueOrPullRequest::PullRequest { .. } => "pull request",
+                        github::events::IssueOrPullRequest::Issue { .. } => "issue",
+                    };
+                    Text::new(vec![
+                        spans!["  {actor} linked a {source_typ} that will close this"],
+                        spans![
+                            "   ",
+                            source
+                                .title()
+                                .to_string()
+                                .underline(meow::style::Underline::Single),
+                            format!(" #{}", source.number()).fg(Color::Gray)
+                        ],
+                    ])
+                    .boxed()
                 }
+                Event::Locked { actor, reason } => {
+                    format!("  {actor} locked and limited conversation to collaborators").boxed()
+                }
+                Event::Milestoned { actor, title } => {
+                    format!("  {actor} added this to the {title} milestone").boxed()
+                }
+
+                Event::Pinned { actor } => format!("  {actor} pinned this").boxed(),
+                Event::Unpinned { actor } => format!("  {actor} unpinned this").boxed(),
+                Event::Unassigned { assignee, actor } => {
+                    format!("  {actor} unassigned {assignee}").boxed()
+                }
+                Event::Unlocked { actor } => format!("  {actor} unlocked this").boxed(),
+
+                Event::Referenced {
+                    actor,
+                    commit_msg_summary,
+                    cross_repository,
+                } => continue,
                 Event::Mentioned | Event::Subscribed => continue,
             };
 
@@ -212,10 +274,7 @@ impl Comment {
 
 impl From<github::events::Comment> for Comment {
     fn from(c: github::events::Comment) -> Self {
-        Self::new(
-            c.body.unwrap_or_else(|| "No description provided.".into()),
-            c.author,
-        )
+        Self::new(c.body, c.author)
     }
 }
 

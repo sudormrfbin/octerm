@@ -362,6 +362,12 @@ impl From<octocrab::models::User> for User {
     }
 }
 
+impl From<String> for User {
+    fn from(name: String) -> Self {
+        Self { name }
+    }
+}
+
 pub struct PullRequest {
     pub meta: PullRequestMeta,
     pub events: Vec<Event>,

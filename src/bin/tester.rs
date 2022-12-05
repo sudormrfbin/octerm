@@ -73,7 +73,7 @@ It is not clear from this prompt that one of them goes to the middle click clipb
         events: vec![
             github::events::Event::Commented(events::Comment {
                 author: User::new("issue-author"),
-                body: Some(r#"As a workaround you can specify a config for the lsp in the languaguages.toml. 
+                body: r#"As a workaround you can specify a config for the lsp in the languaguages.toml. 
 Example:
 ```
 [[language]]
@@ -86,17 +86,17 @@ indent = { tab-width = 2, unit = "  " }
 language-server = { command = "metals" }
 config = {metals.ammoniteJvmProperties = ["-Xmx1G"]}
 ```
-"#.into()),
+"#.into(),
                 }),
             github::events::Event::Commented(events::Comment {
                 author: User::new("replier"),
-                body: Some("Just a heads up, we've fixed this in Metals.\
+                body: "Just a heads up, we've fixed this in Metals.\
 You can test with the latest snapshot to see this working `0.11.9+128-92db24b7-SNAPSHOT`.\
-".into()),
+".into(),
                 }),
             github::events::Event::Commented(events::Comment {
                 author: User::new("issue-author"),
-                body: Some(r#"As a workaround you can specify a config for the lsp in the languaguages.toml. 
+                body: r#"As a workaround you can specify a config for the lsp in the languaguages.toml. 
 Example:
 ```
 [[language]]
@@ -109,7 +109,7 @@ indent = { tab-width = 2, unit = "  " }
 language-server = { command = "metals" }
 config = {metals.ammoniteJvmProperties = ["-Xmx1G"]}
 ```
-"#.into()),
+"#.into(),
                 }),
             ],
         }
