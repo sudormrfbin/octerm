@@ -112,7 +112,8 @@ pub enum Event {
     Unlocked {
         actor: User,
     },
-    Unknown,
+    /// Unhandled event, with name of the event
+    Unknown(&'static str),
 }
 
 pub struct Comment {

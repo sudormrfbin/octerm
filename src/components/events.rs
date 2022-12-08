@@ -36,7 +36,10 @@ impl EventTimeline {
                     format!("  {actor} assigned {assignee}").boxed()
                 }
                 Event::Commented(comment) => Comment::from(comment).boxed(),
-                Event::Unknown => "Unknown event".fg(Color::Red).italic(true).boxed(),
+                Event::Unknown(name) => format!("Unhandled event '{name}'")
+                    .fg(Color::Red)
+                    .italic(true)
+                    .boxed(),
                 Event::Merged { actor, base_branch } => {
                     saw_merged_event = true;
 

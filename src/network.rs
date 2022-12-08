@@ -93,34 +93,54 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
             .into_iter()
             .filter_map(|e| e?.node)
             .map(|node| match node {
-                TimelineEvent::AddedToProjectEvent => Event::Unknown,
-                TimelineEvent::AutoMergeDisabledEvent => Event::Unknown,
-                TimelineEvent::AutoMergeEnabledEvent => Event::Unknown,
-                TimelineEvent::AutoRebaseEnabledEvent => Event::Unknown,
-                TimelineEvent::AutoSquashEnabledEvent => Event::Unknown,
-                TimelineEvent::AutomaticBaseChangeFailedEvent => Event::Unknown,
-                TimelineEvent::AutomaticBaseChangeSucceededEvent => Event::Unknown,
-                TimelineEvent::BaseRefChangedEvent => Event::Unknown,
-                TimelineEvent::BaseRefDeletedEvent => Event::Unknown,
-                TimelineEvent::BaseRefForcePushedEvent => Event::Unknown,
-                TimelineEvent::CommentDeletedEvent => Event::Unknown,
-                TimelineEvent::ConvertedNoteToIssueEvent => Event::Unknown,
-                TimelineEvent::ConvertedToDiscussionEvent(_) => Event::Unknown,
-                TimelineEvent::DemilestonedEvent(_) => Event::Unknown,
-                TimelineEvent::DeployedEvent => Event::Unknown,
-                TimelineEvent::DeploymentEnvironmentChangedEvent => Event::Unknown,
-                TimelineEvent::DisconnectedEvent => Event::Unknown,
-                TimelineEvent::HeadRefRestoredEvent => Event::Unknown,
-                TimelineEvent::MovedColumnsInProjectEvent => Event::Unknown,
-                TimelineEvent::PullRequestCommitCommentThread => Event::Unknown,
-                TimelineEvent::PullRequestReviewThread(_) => Event::Unknown,
-                TimelineEvent::PullRequestRevisionMarker => Event::Unknown,
-                TimelineEvent::RemovedFromProjectEvent => Event::Unknown,
-                TimelineEvent::ReviewDismissedEvent => Event::Unknown,
-                TimelineEvent::ReviewRequestRemovedEvent(_) => Event::Unknown,
-                TimelineEvent::TransferredEvent => Event::Unknown,
-                TimelineEvent::UnsubscribedEvent => Event::Unknown,
-                TimelineEvent::UserBlockedEvent => Event::Unknown,
+                TimelineEvent::AddedToProjectEvent => Event::Unknown("AddedToProjectEvent"),
+                TimelineEvent::AutoMergeDisabledEvent => Event::Unknown("AutoMergeDisabledEvent"),
+                TimelineEvent::AutoMergeEnabledEvent => Event::Unknown("AutoMergeEnabledEvent"),
+                TimelineEvent::AutoRebaseEnabledEvent => Event::Unknown("AutoRebaseEnabledEvent"),
+                TimelineEvent::AutoSquashEnabledEvent => Event::Unknown("AutoSquashEnabledEvent"),
+                TimelineEvent::AutomaticBaseChangeFailedEvent => {
+                    Event::Unknown("AutomaticBaseChangeFailedEvent")
+                }
+                TimelineEvent::AutomaticBaseChangeSucceededEvent => {
+                    Event::Unknown("AutomaticBaseChangeSucceededEvent")
+                }
+                TimelineEvent::BaseRefChangedEvent => Event::Unknown("BaseRefChangedEvent"),
+                TimelineEvent::BaseRefDeletedEvent => Event::Unknown("BaseRefDeletedEvent"),
+                TimelineEvent::BaseRefForcePushedEvent => Event::Unknown("BaseRefForcePushedEvent"),
+                TimelineEvent::CommentDeletedEvent => Event::Unknown("CommentDeletedEvent"),
+                TimelineEvent::ConvertedNoteToIssueEvent => {
+                    Event::Unknown("ConvertedNoteToIssueEvent")
+                }
+                TimelineEvent::ConvertedToDiscussionEvent(_) => {
+                    Event::Unknown("ConvertedToDiscussionEvent")
+                }
+                TimelineEvent::DemilestonedEvent(_) => Event::Unknown("DemilestonedEvent"),
+                TimelineEvent::DeployedEvent => Event::Unknown("DeployedEvent"),
+                TimelineEvent::DeploymentEnvironmentChangedEvent => {
+                    Event::Unknown("DeploymentEnvironmentChangedEvent")
+                }
+                TimelineEvent::DisconnectedEvent => Event::Unknown("DisconnectedEvent"),
+                TimelineEvent::HeadRefRestoredEvent => Event::Unknown("HeadRefRestoredEvent"),
+                TimelineEvent::MovedColumnsInProjectEvent => {
+                    Event::Unknown("MovedColumnsInProjectEvent")
+                }
+                TimelineEvent::PullRequestCommitCommentThread => {
+                    Event::Unknown("PullRequestCommitCommentThread")
+                }
+                TimelineEvent::PullRequestReviewThread(_) => {
+                    Event::Unknown("PullRequestReviewThread")
+                }
+                TimelineEvent::PullRequestRevisionMarker => {
+                    Event::Unknown("PullRequestRevisionMarker")
+                }
+                TimelineEvent::RemovedFromProjectEvent => Event::Unknown("RemovedFromProjectEvent"),
+                TimelineEvent::ReviewDismissedEvent => Event::Unknown("ReviewDismissedEvent"),
+                TimelineEvent::ReviewRequestRemovedEvent(_) => {
+                    Event::Unknown("ReviewRequestRemovedEvent")
+                }
+                TimelineEvent::TransferredEvent => Event::Unknown("TransferredEvent"),
+                TimelineEvent::UnsubscribedEvent => Event::Unknown("UnsubscribedEvent"),
+                TimelineEvent::UserBlockedEvent => Event::Unknown("UserBlockedEvent"),
 
                 TimelineEvent::AssignedEvent(assigned) => {
                     let assignee = assigned
@@ -165,7 +185,7 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
                         CrossRefSource::PullRequest(ref pr) => events::Repository {
                             name: pr.repository.name.clone(),
                             owner: pr.repository.owner.login.clone().into(),
-                        }
+                        },
                     }),
                     actor: actor!(cross),
                     source: issue_or_pr!(cross.source, CrossRefSource),
@@ -370,17 +390,23 @@ async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<(
             .into_iter()
             .filter_map(|e| e?.node)
             .map(|node| match node {
-                TimelineEvent::AddedToProjectEvent => Event::Unknown,
-                TimelineEvent::CommentDeletedEvent => Event::Unknown,
-                TimelineEvent::ConvertedNoteToIssueEvent => Event::Unknown,
-                TimelineEvent::ConvertedToDiscussionEvent(_) => Event::Unknown,
-                TimelineEvent::DemilestonedEvent(_) => Event::Unknown,
-                TimelineEvent::UnsubscribedEvent => Event::Unknown,
-                TimelineEvent::UserBlockedEvent => Event::Unknown,
-                TimelineEvent::TransferredEvent => Event::Unknown,
-                TimelineEvent::RemovedFromProjectEvent => Event::Unknown,
-                TimelineEvent::MovedColumnsInProjectEvent => Event::Unknown,
-                TimelineEvent::DisconnectedEvent => Event::Unknown,
+                TimelineEvent::AddedToProjectEvent => Event::Unknown("AddedToProjectEvent"),
+                TimelineEvent::CommentDeletedEvent => Event::Unknown("CommentDeletedEvent"),
+                TimelineEvent::ConvertedNoteToIssueEvent => {
+                    Event::Unknown("ConvertedNoteToIssueEvent")
+                }
+                TimelineEvent::ConvertedToDiscussionEvent(_) => {
+                    Event::Unknown("ConvertedToDiscussionEvent")
+                }
+                TimelineEvent::DemilestonedEvent(_) => Event::Unknown("DemilestonedEvent"),
+                TimelineEvent::UnsubscribedEvent => Event::Unknown("UnsubscribedEvent"),
+                TimelineEvent::UserBlockedEvent => Event::Unknown("UserBlockedEvent"),
+                TimelineEvent::TransferredEvent => Event::Unknown("TransferredEvent"),
+                TimelineEvent::RemovedFromProjectEvent => Event::Unknown("RemovedFromProjectEvent"),
+                TimelineEvent::MovedColumnsInProjectEvent => {
+                    Event::Unknown("MovedColumnsInProjectEvent")
+                }
+                TimelineEvent::DisconnectedEvent => Event::Unknown("DisconnectedEvent"),
 
                 TimelineEvent::AssignedEvent(assigned) => {
                     let assignee = assigned
@@ -425,7 +451,7 @@ async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<(
                         CrossRefSource::PullRequest(ref pr) => events::Repository {
                             name: pr.repository.name.clone(),
                             owner: pr.repository.owner.login.clone().into(),
-                        }
+                        },
                     }),
                     actor: actor!(cross),
                     source: issue_or_pr!(cross.source, CrossRefSource),
