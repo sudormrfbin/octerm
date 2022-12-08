@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 
-use self::events::Event;
+use self::events::EventKind;
 
 #[derive(Clone)]
 pub struct Notification {
@@ -231,11 +231,11 @@ impl Display for IssueState {
 
 pub struct Issue {
     pub meta: IssueMeta,
-    pub events: Vec<Event>,
+    pub events: Vec<EventKind>,
 }
 
 impl Issue {
-    pub fn new(meta: IssueMeta, events: Vec<Event>) -> Self {
+    pub fn new(meta: IssueMeta, events: Vec<EventKind>) -> Self {
         Self { meta, events }
     }
 }
@@ -370,11 +370,11 @@ impl From<String> for User {
 
 pub struct PullRequest {
     pub meta: PullRequestMeta,
-    pub events: Vec<Event>,
+    pub events: Vec<EventKind>,
 }
 
 impl PullRequest {
-    pub fn new(meta: PullRequestMeta, events: Vec<Event>) -> Self {
+    pub fn new(meta: PullRequestMeta, events: Vec<EventKind>) -> Self {
         Self { meta, events }
     }
 }

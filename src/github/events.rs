@@ -1,6 +1,6 @@
 use super::User;
 
-pub enum Event {
+pub enum EventKind {
     Assigned {
         assignee: User,
         actor: User,
