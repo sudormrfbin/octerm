@@ -47,20 +47,35 @@ query IssueTimelineQuery($owner: String!, $repo: String!, $number: Int!) {
             }
             ... on CrossReferencedEvent {
               createdAt
-              actor {
-                __typename
-                login
-              }
+              isCrossRepository
               source {
                 __typename
                 ... on PullRequest {
                   title
                   number
+                  repository {
+                    name
+                    owner {
+                      __typename
+                      login
+                    }
+                  }
                 }
                 ... on Issue {
                   number
                   title
+                  repository {
+                    name
+                    owner {
+                      __typename
+                      login
+                    }
+                  }
                 }
+              }
+              actor {
+                __typename
+                login
               }
             }
             ... on IssueComment {

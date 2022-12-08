@@ -157,6 +157,16 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
                 },
 
                 TimelineEvent::CrossReferencedEvent(cross) => Event::CrossReferenced {
+                    cross_repository: cross.is_cross_repository.then(|| match cross.source {
+                        CrossRefSource::Issue(ref i) => events::Repository {
+                            name: i.repository.name.clone(),
+                            owner: i.repository.owner.login.clone().into(),
+                        },
+                        CrossRefSource::PullRequest(ref pr) => events::Repository {
+                            name: pr.repository.name.clone(),
+                            owner: pr.repository.owner.login.clone().into(),
+                        }
+                    }),
                     actor: actor!(cross),
                     source: issue_or_pr!(cross.source, CrossRefSource),
                 },
@@ -407,6 +417,16 @@ async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<(
                 },
 
                 TimelineEvent::CrossReferencedEvent(cross) => Event::CrossReferenced {
+                    cross_repository: cross.is_cross_repository.then(|| match cross.source {
+                        CrossRefSource::Issue(ref i) => events::Repository {
+                            name: i.repository.name.clone(),
+                            owner: i.repository.owner.login.clone().into(),
+                        },
+                        CrossRefSource::PullRequest(ref pr) => events::Repository {
+                            name: pr.repository.name.clone(),
+                            owner: pr.repository.owner.login.clone().into(),
+                        }
+                    }),
                     actor: actor!(cross),
                     source: issue_or_pr!(cross.source, CrossRefSource),
                 },

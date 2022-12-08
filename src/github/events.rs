@@ -1,4 +1,4 @@
-use super::{IssueDeserModel, User};
+use super::User;
 
 pub enum Event {
     Assigned {
@@ -40,6 +40,8 @@ pub enum Event {
     CrossReferenced {
         actor: User,
         source: IssueOrPullRequest,
+        /// Whether the referring issue/PR is in another repository
+        cross_repository: Option<Repository>,
     },
     HeadRefForcePushed {
         actor: User,

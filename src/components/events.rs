@@ -127,18 +127,30 @@ impl EventTimeline {
                 Event::UnmarkedAsDuplicate { actor } => {
                     format!("  {actor} marked this as not a duplicate").boxed()
                 }
-                Event::CrossReferenced { actor, source } => Text::new(vec![
-                    spans!["  Cross referenced by ", actor.to_string(), " from"],
-                    spans![
-                        "   ",
-                        source
-                            .title()
-                            .to_string()
-                            .underline(meow::style::Underline::Single),
-                        format!(" #{}", source.number()).fg(Color::Gray)
-                    ],
-                ])
-                .boxed(),
+                Event::CrossReferenced {
+                    actor,
+                    source,
+                    cross_repository,
+                } => {
+                    let number = source.number();
+                    let title = source.title();
+                    let source = match cross_repository {
+                        Some(github::events::Repository { name, owner }) => {
+                            format!("{owner}/{name}#{number}")
+                        }
+                        None => format!("#{number}"),
+                    };
+                    Text::new(vec![
+                        spans!["  Cross referenced by ", actor.to_string(), " from"],
+                        spans![
+                            "   ",
+                            title.to_string().underline(meow::style::Underline::Single),
+                            " ",
+                            source.fg(Color::Gray)
+                        ],
+                    ])
+                    .boxed()
+                }
                 Event::HeadRefForcePushed {
                     actor,
                     before_commit_abbr_oid: before,
