@@ -8,10 +8,7 @@ use meow::{
     style::{Color, Stylize},
 };
 
-use crate::github::{
-    self,
-    events::{self, EventKind},
-};
+use crate::github::{self, events::EventKind};
 
 use super::events::EventTimeline;
 
@@ -40,10 +37,10 @@ impl From<github::PullRequest> for PullRequestView {
             .push(spans![state, " ", pr.meta.title, " ", number])
             .push(Line::horizontal().blank())
             .push(EventTimeline::new(
-                std::iter::once(EventKind::Commented(events::Comment {
-                    author: pr.meta.author,
-                    body: pr.meta.body,
-                }))
+                std::iter::once(
+                    EventKind::Commented { body: pr.meta.body }
+                        .with(pr.meta.author, pr.meta.created_at),
+                )
                 .chain(pr.events),
             ));
 

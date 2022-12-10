@@ -1,7 +1,7 @@
 use meow::{components::Component, App, Cmd};
 use octerm::{
     components::{IssueView, IssueViewMsg},
-    github::{self, User, events},
+    github::{self, events::DateTimeUtc, User},
 };
 
 enum Msg {
@@ -53,6 +53,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn fake_issue() -> github::Issue {
+    let date = DateTimeUtc::from_utc(
+        chrono::NaiveDate::from_ymd_opt(2022, 4, 12)
+            .unwrap()
+            .and_hms_opt(3, 45, 23)
+            .unwrap(),
+        chrono::Utc,
+    );
     github::Issue {
         meta: github::IssueMeta {
             repo: github::RepoMeta {
@@ -69,10 +76,10 @@ It is not clear from this prompt that one of them goes to the middle click clipb
             number: 1045,
             author: User::new("username"),
             state: github::IssueState::Open,
+            created_at: date,
         },
         events: vec![
-            github::events::EventKind::Commented(events::Comment {
-                author: User::new("issue-author"),
+            github::events::EventKind::Commented {
                 body: r#"As a workaround you can specify a config for the lsp in the languaguages.toml. 
 Example:
 ```
@@ -87,15 +94,15 @@ language-server = { command = "metals" }
 config = {metals.ammoniteJvmProperties = ["-Xmx1G"]}
 ```
 "#.into(),
-                }),
-            github::events::EventKind::Commented(events::Comment {
-                author: User::new("replier"),
+                }.with(
+                User::new("issue-author"), date + chrono::Days::new(1)
+            ),
+            github::events::EventKind::Commented{
                 body: "Just a heads up, we've fixed this in Metals.\
 You can test with the latest snapshot to see this working `0.11.9+128-92db24b7-SNAPSHOT`.\
 ".into(),
-                }),
-            github::events::EventKind::Commented(events::Comment {
-                author: User::new("issue-author"),
+                }.with(User::new("replier"), date + chrono::Days::new(2)),
+            github::events::EventKind::Commented{
                 body: r#"As a workaround you can specify a config for the lsp in the languaguages.toml. 
 Example:
 ```
@@ -110,7 +117,7 @@ language-server = { command = "metals" }
 config = {metals.ammoniteJvmProperties = ["-Xmx1G"]}
 ```
 "#.into(),
-                }),
+                }.with(User::new("issue-author"), date + chrono::Days::new(3)),
             ],
         }
 }

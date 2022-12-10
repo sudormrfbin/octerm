@@ -1,18 +1,36 @@
 use super::User;
 
+pub type DateTimeLocal = chrono::DateTime<chrono::Local>;
+pub type DateTimeUtc = chrono::DateTime<chrono::Utc>;
+
+pub struct Event {
+    pub actor: User,
+    pub created_at: DateTimeLocal,
+    pub kind: EventKind,
+}
+
+impl Event {
+    pub fn unknown(ev: &'static str) -> Self {
+        Event {
+            actor: User { name: "".into() },
+            created_at: DateTimeLocal::default(),
+            kind: EventKind::Unknown(ev),
+        }
+    }
+}
+
 pub enum EventKind {
     Assigned {
         assignee: User,
-        actor: User,
     },
-    Commented(Comment),
+    Commented {
+        body: String,
+    },
     Merged {
-        actor: User,
         /// The branch into which the PR was merged (main,master, etc)
         base_branch: String,
     },
     Closed {
-        actor: User,
         /// The issue was closed automatically because a PR/commit was linked
         /// here and was merged/committed.
         closer: Option<IssueCloser>,
@@ -20,85 +38,59 @@ pub enum EventKind {
     Committed {
         message_headline: String,
         abbreviated_oid: String,
-        author: User,
     },
     Labeled {
-        actor: User,
         label: Label,
     },
     Unlabeled {
-        actor: User,
         label: Label,
     },
     MarkedAsDuplicate {
-        actor: User,
         original: Option<IssueOrPullRequest>,
     },
-    UnmarkedAsDuplicate {
-        actor: User,
-    },
+    UnmarkedAsDuplicate,
     CrossReferenced {
-        actor: User,
         source: IssueOrPullRequest,
         /// Whether the referring issue/PR is in another repository
         cross_repository: Option<Repository>,
     },
     HeadRefForcePushed {
-        actor: User,
         before_commit_abbr_oid: String,
         after_commit_abbr_oid: String,
     },
     HeadRefDeleted {
-        actor: User,
         /// Deleted branch
         branch: String,
     },
-    MarkedAsDraft {
-        actor: User,
-    },
-    MarkedAsReadyForReview {
-        actor: User,
-    },
+    MarkedAsDraft,
+    MarkedAsReadyForReview,
     ReviewRequested {
-        actor: User,
         requested_reviewer: User,
     },
     Reviewed {
         state: ReviewState,
-        actor: User,
         body: Option<String>,
     },
     /// The issue/PR was linked to another issue/PR for automatic closing.
     Connected {
-        actor: User,
         /// The issue/PR that referenced this issue/PR.
         source: IssueOrPullRequest,
     },
-    Reopened {
-        actor: User,
-    },
+    Reopened,
     Renamed {
-        actor: User,
         from: String,
         to: String,
     },
     Locked {
-        actor: User,
         reason: Option<LockReason>,
     },
     Milestoned {
-        actor: User,
         title: String,
     },
-    Pinned {
-        actor: User,
-    },
-    Unpinned {
-        actor: User,
-    },
+    Pinned,
+    Unpinned,
     /// This issue/PR was referenced by a commit
     Referenced {
-        actor: User,
         commit_msg_summary: String,
         /// Whether the commit is in another repository
         cross_repository: Option<Repository>,
@@ -107,25 +99,31 @@ pub enum EventKind {
     Subscribed,
     Unassigned {
         assignee: User,
-        actor: User,
     },
-    Unlocked {
-        actor: User,
-    },
+    Unlocked,
     /// Unhandled event, with name of the event
     Unknown(&'static str),
 }
 
-pub struct Comment {
-    pub author: User,
-    pub body: String,
-}
+impl EventKind {
+    /// Create an Event from an EventKind with the supplied actor and date.
+    /// Useful as builder pattern. UTC time is converted to local time.
+    pub fn with(self, actor: User, created_at: DateTimeUtc) -> Event {
+        Event {
+            actor,
+            created_at: created_at.into(),
+            kind: self,
+        }
+    }
 
-impl From<octocrab::models::issues::Comment> for Comment {
-    fn from(c: octocrab::models::issues::Comment) -> Self {
-        Comment {
-            author: c.user.into(),
-            body: c.body.unwrap_or_default(),
+    /// Create an event with no author and date. The event does have these
+    /// attributes, but we simply do not care about them for some events like
+    /// Subscribed, Mentioned, etc
+    pub fn anonymous(self) -> Event {
+        Event {
+            kind: self,
+            created_at: DateTimeLocal::default(),
+            actor: User::new(""),
         }
     }
 }

@@ -8,7 +8,7 @@ pub fn response_to_result<Data>(resp: Response<Data>) -> Result<Option<Data>> {
     Ok(resp.data)
 }
 
-pub type DateTime = chrono::DateTime<chrono::Utc>;
+pub type DateTime = crate::github::events::DateTimeUtc;
 
 #[derive(graphql_client::GraphQLQuery)]
 #[graphql(

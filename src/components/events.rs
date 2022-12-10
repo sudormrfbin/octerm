@@ -14,7 +14,7 @@ use meow::{
 use crate::{
     github::{
         self,
-        events::{EventKind, Label, ReviewState},
+        events::{Event, EventKind, Label, ReviewState},
         User,
     },
     markdown::Markdown,
@@ -26,21 +26,22 @@ pub struct EventTimeline {
 }
 
 impl EventTimeline {
-    pub fn new(events: impl IntoIterator<Item = EventKind>) -> Self {
+    pub fn new(events: impl IntoIterator<Item = Event>) -> Self {
         let mut layout = Layout::vertical();
         let mut saw_merged_event = false;
 
         for event in events {
-            let renderable: Box<dyn Renderable> = match event {
-                EventKind::Assigned { assignee, actor } => {
+            let actor = event.actor;
+            let renderable: Box<dyn Renderable> = match event.kind {
+                EventKind::Assigned { assignee } => {
                     format!("  {actor} assigned {assignee}").boxed()
                 }
-                EventKind::Commented(comment) => Comment::from(comment).boxed(),
+                EventKind::Commented { body } => Comment::new(body, actor).boxed(),
                 EventKind::Unknown(name) => format!("Unhandled event '{name}'")
                     .fg(Color::Red)
                     .italic(true)
                     .boxed(),
-                EventKind::Merged { actor, base_branch } => {
+                EventKind::Merged { base_branch } => {
                     saw_merged_event = true;
 
                     spans![
@@ -57,7 +58,7 @@ impl EventTimeline {
                 // event, so filter it out if it's already merged.
                 EventKind::Closed { .. } if saw_merged_event => continue,
                 // TODO: Use correct icon here based on PR/issue
-                EventKind::Closed { actor, closer } => {
+                EventKind::Closed { closer } => {
                     let mut spans = spans![
                         "  ".fg(Color::Red),
                         " Closed ".bg(Color::Red).fg(Color::Black),
@@ -77,7 +78,7 @@ impl EventTimeline {
                     }
                     spans.boxed()
                 }
-                EventKind::Reopened { actor } => spans![
+                EventKind::Reopened {} => spans![
                     "  ".fg(Color::Green),
                     " Reopened ".bg(Color::Green).fg(Color::Black),
                     " by ",
@@ -87,10 +88,8 @@ impl EventTimeline {
                 EventKind::Committed {
                     message_headline: message,
                     abbreviated_oid,
-                    author: _,
                 } => spans!["  ", message, " ", abbreviated_oid.fg(Color::Gray)].boxed(),
                 EventKind::Labeled {
-                    actor,
                     label: Label { name },
                 } => spans![
                     "  ",
@@ -101,7 +100,6 @@ impl EventTimeline {
                 ]
                 .boxed(),
                 EventKind::Unlabeled {
-                    actor,
                     label: Label { name },
                 } => spans![
                     "  ",
@@ -111,7 +109,7 @@ impl EventTimeline {
                     " label"
                 ]
                 .boxed(),
-                EventKind::MarkedAsDuplicate { actor, original } => {
+                EventKind::MarkedAsDuplicate { original } => {
                     let (title, number) = original
                         .as_ref()
                         .map(|o| (o.title().to_string(), o.number()))
@@ -127,11 +125,10 @@ impl EventTimeline {
                     ])
                     .boxed()
                 }
-                EventKind::UnmarkedAsDuplicate { actor } => {
+                EventKind::UnmarkedAsDuplicate {} => {
                     format!("  {actor} marked this as not a duplicate").boxed()
                 }
                 EventKind::CrossReferenced {
-                    actor,
                     source,
                     cross_repository,
                 } => {
@@ -155,7 +152,6 @@ impl EventTimeline {
                     .boxed()
                 }
                 EventKind::HeadRefForcePushed {
-                    actor,
                     before_commit_abbr_oid: before,
                     after_commit_abbr_oid: after,
                 } => spans![
@@ -167,16 +163,16 @@ impl EventTimeline {
                     after.fg(Color::Gray)
                 ]
                 .boxed(),
-                EventKind::HeadRefDeleted { actor, branch } => {
+                EventKind::HeadRefDeleted { branch } => {
                     format!["  {actor} deleted the {branch} branch"].boxed()
                 }
-                EventKind::Renamed { actor, from, to } => Text::new(vec![
+                EventKind::Renamed { from, to } => Text::new(vec![
                     spans!["  ", actor.to_string(), " changed the title"],
                     spans!["   ", from.strikethrough(true)],
                     spans!["   ", to],
                 ])
                 .boxed(),
-                EventKind::Reviewed { state, actor, body } => {
+                EventKind::Reviewed { state, body } => {
                     let state_text = match state {
                         ReviewState::Commented => {
                             spans!(
@@ -218,7 +214,7 @@ impl EventTimeline {
                         None => state_text.boxed(),
                     }
                 }
-                EventKind::Connected { actor, source } => {
+                EventKind::Connected { source } => {
                     // TODO: Use correct nouns here (linked an issue/PR to close this issue/PR)
                     let source_typ = match source {
                         github::events::IssueOrPullRequest::PullRequest { .. } => "pull request",
@@ -239,22 +235,21 @@ impl EventTimeline {
                     ])
                     .boxed()
                 }
-                EventKind::Locked { actor, reason: _ } => {
+                EventKind::Locked { reason: _ } => {
                     format!("  {actor} locked and limited conversation to collaborators").boxed()
                 }
-                EventKind::Milestoned { actor, title } => {
+                EventKind::Milestoned { title } => {
                     format!("  {actor} added this to the {title} milestone").boxed()
                 }
 
-                EventKind::Pinned { actor } => format!("  {actor} pinned this").boxed(),
-                EventKind::Unpinned { actor } => format!("  {actor} unpinned this").boxed(),
-                EventKind::Unassigned { assignee, actor } => {
+                EventKind::Pinned {} => format!("  {actor} pinned this").boxed(),
+                EventKind::Unpinned {} => format!("  {actor} unpinned this").boxed(),
+                EventKind::Unassigned { assignee } => {
                     format!("  {actor} unassigned {assignee}").boxed()
                 }
-                EventKind::Unlocked { actor } => format!("  {actor} unlocked this").boxed(),
+                EventKind::Unlocked {} => format!("  {actor} unlocked this").boxed(),
 
                 EventKind::Referenced {
-                    actor,
                     commit_msg_summary,
                     cross_repository,
                 } => {
@@ -271,14 +266,13 @@ impl EventTimeline {
                 }
                 EventKind::Mentioned | EventKind::Subscribed => continue,
 
-                EventKind::MarkedAsDraft { actor } => {
+                EventKind::MarkedAsDraft {} => {
                     format!("  {actor} marked this pull request as draft").boxed()
                 }
-                EventKind::MarkedAsReadyForReview { actor } => {
+                EventKind::MarkedAsReadyForReview {} => {
                     format!("  {actor} marked this pull request as ready for review").boxed()
                 }
                 EventKind::ReviewRequested {
-                    actor,
                     requested_reviewer: reviewer,
                 } => format!("  {actor} requested a review from {reviewer}").boxed(),
             };
@@ -324,12 +318,6 @@ impl Comment {
                     }),
             );
         Self { body: layout }
-    }
-}
-
-impl From<github::events::Comment> for Comment {
-    fn from(c: github::events::Comment) -> Self {
-        Self::new(c.body, c.author)
     }
 }
 

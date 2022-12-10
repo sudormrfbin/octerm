@@ -261,6 +261,7 @@ query PullRequestTimelineQuery($owner: String!, $repo: String!, $number: Int!) {
             }
             ... on ConvertToDraftEvent {
               id
+              createdAt
               actor {
                 __typename
                 login
@@ -303,6 +304,7 @@ query PullRequestTimelineQuery($owner: String!, $repo: String!, $number: Int!) {
               commit {
                 abbreviatedOid
                 messageHeadline
+                committedDate
                 author {
                   __typename
                   name
@@ -367,6 +369,7 @@ query PullRequestTimelineQuery($owner: String!, $repo: String!, $number: Int!) {
             }
             ... on ReviewRequestedEvent {
               id
+              createdAt
               actor {
                 __typename
                 login

@@ -39,10 +39,12 @@ impl From<github::Issue> for IssueView {
             .push(spans![state, " ", issue.meta.title, " ", number])
             .push(Line::horizontal().blank())
             .push(EventTimeline::new(
-                std::iter::once(events::EventKind::Commented(events::Comment {
-                    author: issue.meta.author,
-                    body: issue.meta.body,
-                }))
+                std::iter::once(
+                    events::EventKind::Commented {
+                        body: issue.meta.body,
+                    }
+                    .with(issue.meta.author, issue.meta.created_at),
+                )
                 .chain(issue.events),
             ));
 

@@ -10,6 +10,7 @@ use octocrab::{models::activity::Notification as OctoNotification, Page};
 use tokio::task::JoinHandle;
 
 use crate::error::{Error, Result};
+use crate::github::events::Event;
 use crate::github::{self, events, Issue, IssueMeta, Notification, PullRequest, PullRequestMeta};
 use crate::{ServerRequest, ServerResponse};
 
@@ -73,7 +74,7 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
         <graphql::PullRequestTimelineQuery as GraphQLQuery>::ResponseData,
     >(response)?;
 
-    let convert_to_events = move || -> Option<Vec<github::events::EventKind>> {
+    let convert_to_events = move || -> Option<Vec<github::events::Event>> {
         use github::events::EventKind;
         use graphql::pull_request_timeline_query::*;
         use PullRequestTimelineQueryRepositoryPullRequestTimelineItemsEdgesNode as TimelineEvent;
@@ -93,54 +94,54 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
             .into_iter()
             .filter_map(|e| e?.node)
             .map(|node| match node {
-                TimelineEvent::AddedToProjectEvent => EventKind::Unknown("AddedToProjectEvent"),
-                TimelineEvent::AutoMergeDisabledEvent => EventKind::Unknown("AutoMergeDisabledEvent"),
-                TimelineEvent::AutoMergeEnabledEvent => EventKind::Unknown("AutoMergeEnabledEvent"),
-                TimelineEvent::AutoRebaseEnabledEvent => EventKind::Unknown("AutoRebaseEnabledEvent"),
-                TimelineEvent::AutoSquashEnabledEvent => EventKind::Unknown("AutoSquashEnabledEvent"),
+                TimelineEvent::AddedToProjectEvent => Event::unknown("AddedToProjectEvent"),
+                TimelineEvent::AutoMergeDisabledEvent => Event::unknown("AutoMergeDisabledEvent"),
+                TimelineEvent::AutoMergeEnabledEvent => Event::unknown("AutoMergeEnabledEvent"),
+                TimelineEvent::AutoRebaseEnabledEvent => Event::unknown("AutoRebaseEnabledEvent"),
+                TimelineEvent::AutoSquashEnabledEvent => Event::unknown("AutoSquashEnabledEvent"),
                 TimelineEvent::AutomaticBaseChangeFailedEvent => {
-                    EventKind::Unknown("AutomaticBaseChangeFailedEvent")
+                    Event::unknown("AutomaticBaseChangeFailedEvent")
                 }
                 TimelineEvent::AutomaticBaseChangeSucceededEvent => {
-                    EventKind::Unknown("AutomaticBaseChangeSucceededEvent")
+                    Event::unknown("AutomaticBaseChangeSucceededEvent")
                 }
-                TimelineEvent::BaseRefChangedEvent => EventKind::Unknown("BaseRefChangedEvent"),
-                TimelineEvent::BaseRefDeletedEvent => EventKind::Unknown("BaseRefDeletedEvent"),
-                TimelineEvent::BaseRefForcePushedEvent => EventKind::Unknown("BaseRefForcePushedEvent"),
-                TimelineEvent::CommentDeletedEvent => EventKind::Unknown("CommentDeletedEvent"),
+                TimelineEvent::BaseRefChangedEvent => Event::unknown("BaseRefChangedEvent"),
+                TimelineEvent::BaseRefDeletedEvent => Event::unknown("BaseRefDeletedEvent"),
+                TimelineEvent::BaseRefForcePushedEvent => Event::unknown("BaseRefForcePushedEvent"),
+                TimelineEvent::CommentDeletedEvent => Event::unknown("CommentDeletedEvent"),
                 TimelineEvent::ConvertedNoteToIssueEvent => {
-                    EventKind::Unknown("ConvertedNoteToIssueEvent")
+                    Event::unknown("ConvertedNoteToIssueEvent")
                 }
                 TimelineEvent::ConvertedToDiscussionEvent(_) => {
-                    EventKind::Unknown("ConvertedToDiscussionEvent")
+                    Event::unknown("ConvertedToDiscussionEvent")
                 }
-                TimelineEvent::DemilestonedEvent(_) => EventKind::Unknown("DemilestonedEvent"),
-                TimelineEvent::DeployedEvent => EventKind::Unknown("DeployedEvent"),
+                TimelineEvent::DemilestonedEvent(_) => Event::unknown("DemilestonedEvent"),
+                TimelineEvent::DeployedEvent => Event::unknown("DeployedEvent"),
                 TimelineEvent::DeploymentEnvironmentChangedEvent => {
-                    EventKind::Unknown("DeploymentEnvironmentChangedEvent")
+                    Event::unknown("DeploymentEnvironmentChangedEvent")
                 }
-                TimelineEvent::DisconnectedEvent => EventKind::Unknown("DisconnectedEvent"),
-                TimelineEvent::HeadRefRestoredEvent => EventKind::Unknown("HeadRefRestoredEvent"),
+                TimelineEvent::DisconnectedEvent => Event::unknown("DisconnectedEvent"),
+                TimelineEvent::HeadRefRestoredEvent => Event::unknown("HeadRefRestoredEvent"),
                 TimelineEvent::MovedColumnsInProjectEvent => {
-                    EventKind::Unknown("MovedColumnsInProjectEvent")
+                    Event::unknown("MovedColumnsInProjectEvent")
                 }
                 TimelineEvent::PullRequestCommitCommentThread => {
-                    EventKind::Unknown("PullRequestCommitCommentThread")
+                    Event::unknown("PullRequestCommitCommentThread")
                 }
                 TimelineEvent::PullRequestReviewThread(_) => {
-                    EventKind::Unknown("PullRequestReviewThread")
+                    Event::unknown("PullRequestReviewThread")
                 }
                 TimelineEvent::PullRequestRevisionMarker => {
-                    EventKind::Unknown("PullRequestRevisionMarker")
+                    Event::unknown("PullRequestRevisionMarker")
                 }
-                TimelineEvent::RemovedFromProjectEvent => EventKind::Unknown("RemovedFromProjectEvent"),
-                TimelineEvent::ReviewDismissedEvent => EventKind::Unknown("ReviewDismissedEvent"),
+                TimelineEvent::RemovedFromProjectEvent => Event::unknown("RemovedFromProjectEvent"),
+                TimelineEvent::ReviewDismissedEvent => Event::unknown("ReviewDismissedEvent"),
                 TimelineEvent::ReviewRequestRemovedEvent(_) => {
-                    EventKind::Unknown("ReviewRequestRemovedEvent")
+                    Event::unknown("ReviewRequestRemovedEvent")
                 }
-                TimelineEvent::TransferredEvent => EventKind::Unknown("TransferredEvent"),
-                TimelineEvent::UnsubscribedEvent => EventKind::Unknown("UnsubscribedEvent"),
-                TimelineEvent::UserBlockedEvent => EventKind::Unknown("UserBlockedEvent"),
+                TimelineEvent::TransferredEvent => Event::unknown("TransferredEvent"),
+                TimelineEvent::UnsubscribedEvent => Event::unknown("UnsubscribedEvent"),
+                TimelineEvent::UserBlockedEvent => Event::unknown("UserBlockedEvent"),
 
                 TimelineEvent::AssignedEvent(assigned) => {
                     let assignee = assigned
@@ -154,10 +155,7 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
                         .unwrap_or_default()
                         .into();
 
-                    EventKind::Assigned {
-                        assignee,
-                        actor: actor!(assigned),
-                    }
+                    EventKind::Assigned { assignee }.with(actor!(assigned), assigned.created_at)
                 }
 
                 TimelineEvent::ClosedEvent(closed) => {
@@ -165,16 +163,13 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
                         Closer::Commit(c) => c.abbreviated_oid.into(),
                         Closer::PullRequest(pr) => pr.number.into(),
                     });
-                    EventKind::Closed {
-                        actor: actor!(closed),
-                        closer,
-                    }
+                    EventKind::Closed { closer }.with(actor!(closed), closed.created_at)
                 }
 
                 TimelineEvent::ConnectedEvent(connected) => EventKind::Connected {
-                    actor: actor!(connected),
                     source: issue_or_pr!(connected.source, ConnectedSource),
-                },
+                }
+                .with(actor!(connected), connected.created_at),
 
                 TimelineEvent::CrossReferencedEvent(cross) => EventKind::CrossReferenced {
                     cross_repository: cross.is_cross_repository.then(|| match cross.source {
@@ -187,19 +182,18 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
                             owner: pr.repository.owner.login.clone().into(),
                         },
                     }),
-                    actor: actor!(cross),
+
                     source: issue_or_pr!(cross.source, CrossRefSource),
-                },
-                TimelineEvent::IssueComment(comment) => EventKind::Commented(events::Comment {
-                    author: actor!(comment, author),
-                    body: comment.body,
-                }),
+                }
+                .with(actor!(cross), cross.created_at),
+                TimelineEvent::IssueComment(comment) => EventKind::Commented { body: comment.body }
+                    .with(actor!(comment, author), comment.created_at),
                 TimelineEvent::LabeledEvent(labeled) => EventKind::Labeled {
-                    actor: actor!(labeled),
                     label: events::Label {
                         name: labeled.label.name,
                     },
-                },
+                }
+                .with(actor!(labeled), labeled.created_at),
 
                 TimelineEvent::LockedEvent(locked) => {
                     let reason = locked.lock_reason.map(|l| match l {
@@ -209,23 +203,20 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
                         LockReason::TOO_HEATED => events::LockReason::TooHeated,
                         LockReason::Other(s) => events::LockReason::Other(s),
                     });
-                    EventKind::Locked {
-                        actor: actor!(locked),
-                        reason,
-                    }
+                    EventKind::Locked { reason }.with(actor!(locked), locked.created_at)
                 }
 
                 TimelineEvent::MarkedAsDuplicateEvent(dup) => EventKind::MarkedAsDuplicate {
-                    actor: actor!(dup),
                     original: dup.canonical.map(|c| issue_or_pr!(c, DuplicateCanonical)),
-                },
+                }
+                .with(actor!(dup), dup.created_at),
                 TimelineEvent::MilestonedEvent(milestone) => EventKind::Milestoned {
-                    actor: actor!(milestone),
                     title: milestone.milestone_title,
-                },
-                TimelineEvent::PinnedEvent(pinned) => EventKind::Pinned {
-                    actor: actor!(pinned),
-                },
+                }
+                .with(actor!(milestone), milestone.created_at),
+                TimelineEvent::PinnedEvent(pinned) => {
+                    EventKind::Pinned {}.with(actor!(pinned), pinned.created_at)
+                }
 
                 TimelineEvent::ReferencedEvent(refer) => {
                     let repo = refer.is_cross_repository.then(|| events::Repository {
@@ -234,20 +225,20 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
                     });
                     let commit_msg = refer.commit.map(|c| c.message_headline).unwrap_or_default();
                     EventKind::Referenced {
-                        actor: actor!(refer),
                         commit_msg_summary: commit_msg,
                         cross_repository: repo,
                     }
+                    .with(actor!(refer), refer.created_at)
                 }
 
                 TimelineEvent::RenamedTitleEvent(rename) => EventKind::Renamed {
-                    actor: actor!(rename),
                     from: rename.previous_title,
                     to: rename.current_title,
-                },
-                TimelineEvent::ReopenedEvent(reopen) => EventKind::Reopened {
-                    actor: actor!(reopen),
-                },
+                }
+                .with(actor!(rename), rename.created_at),
+                TimelineEvent::ReopenedEvent(reopen) => {
+                    EventKind::Reopened {}.with(actor!(reopen), reopen.created_at)
+                }
 
                 TimelineEvent::UnassignedEvent(unassigned) => {
                     let unassignee = unassigned
@@ -262,37 +253,36 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
                         .into();
                     EventKind::Unassigned {
                         assignee: unassignee,
-                        actor: actor!(unassigned),
                     }
+                    .with(actor!(unassigned), unassigned.created_at)
                 }
 
                 TimelineEvent::UnlabeledEvent(unlabeled) => EventKind::Unlabeled {
-                    actor: actor!(unlabeled),
                     label: events::Label {
                         name: unlabeled.label.name,
                     },
-                },
-                TimelineEvent::UnlockedEvent(unlock) => EventKind::Unlocked {
-                    actor: actor!(unlock),
-                },
-                TimelineEvent::UnmarkedAsDuplicateEvent(notdup) => EventKind::UnmarkedAsDuplicate {
-                    actor: actor!(notdup),
-                },
-                TimelineEvent::UnpinnedEvent(unpin) => EventKind::Unpinned {
-                    actor: actor!(unpin),
-                },
-                TimelineEvent::SubscribedEvent => EventKind::Subscribed,
-                TimelineEvent::MentionedEvent => EventKind::Mentioned,
+                }
+                .with(actor!(unlabeled), unlabeled.created_at),
+                TimelineEvent::UnlockedEvent(unlock) => {
+                    EventKind::Unlocked {}.with(actor!(unlock), unlock.created_at)
+                }
+                TimelineEvent::UnmarkedAsDuplicateEvent(notdup) => {
+                    EventKind::UnmarkedAsDuplicate {}.with(actor!(notdup), notdup.created_at)
+                }
+                TimelineEvent::UnpinnedEvent(unpin) => {
+                    EventKind::Unpinned {}.with(actor!(unpin), unpin.created_at)
+                }
+                TimelineEvent::SubscribedEvent => EventKind::Subscribed.anonymous(),
+                TimelineEvent::MentionedEvent => EventKind::Mentioned.anonymous(),
 
-                TimelineEvent::ConvertToDraftEvent(draft) => EventKind::MarkedAsDraft {
-                    actor: actor!(draft),
-                },
+                TimelineEvent::ConvertToDraftEvent(draft) => {
+                    EventKind::MarkedAsDraft {}.with(actor!(draft), draft.created_at)
+                }
                 TimelineEvent::HeadRefDeletedEvent(refdel) => EventKind::HeadRefDeleted {
-                    actor: actor!(refdel),
                     branch: refdel.head_ref_name,
-                },
+                }
+                .with(actor!(refdel), refdel.created_at),
                 TimelineEvent::HeadRefForcePushedEvent(reforce) => EventKind::HeadRefForcePushed {
-                    actor: actor!(reforce),
                     before_commit_abbr_oid: reforce
                         .before_commit
                         .map(|c| c.abbreviated_oid)
@@ -301,22 +291,26 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
                         .after_commit
                         .map(|c| c.abbreviated_oid)
                         .unwrap_or_default(),
-                },
+                }
+                .with(actor!(reforce), reforce.created_at),
                 TimelineEvent::MergedEvent(merged) => EventKind::Merged {
-                    actor: actor!(merged),
                     base_branch: merged.merge_ref_name,
-                },
-                TimelineEvent::PullRequestCommit(committed) => EventKind::Committed {
-                    message_headline: committed.commit.message_headline,
-                    abbreviated_oid: committed.commit.abbreviated_oid,
-                    // TODO: Check commit author too
-                    author: committed
+                }
+                .with(actor!(merged), merged.created_at),
+                TimelineEvent::PullRequestCommit(committed) => {
+                    let author = committed
                         .commit
                         .committer
                         .and_then(|c| c.user.map(|u| u.login).or(c.name))
                         .unwrap_or_default()
-                        .into(),
-                },
+                        .into();
+                    EventKind::Committed {
+                        message_headline: committed.commit.message_headline,
+                        abbreviated_oid: committed.commit.abbreviated_oid,
+                        // TODO: Check commit author too
+                    }
+                    .with(author, committed.commit.committed_date)
+                }
                 TimelineEvent::PullRequestReview(review) => EventKind::Reviewed {
                     state: match review.state {
                         PullRequestReviewState::APPROVED => events::ReviewState::Approved,
@@ -328,14 +322,14 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
                         PullRequestReviewState::PENDING => events::ReviewState::Pending,
                         PullRequestReviewState::Other(s) => events::ReviewState::Other(s),
                     },
-                    actor: actor!(review, author),
+
                     body: review.body.is_empty().not().then(|| review.body),
-                },
-                TimelineEvent::ReadyForReviewEvent(ready) => EventKind::MarkedAsReadyForReview {
-                    actor: actor!(ready),
-                },
+                }
+                .with(actor!(review, author), review.created_at),
+                TimelineEvent::ReadyForReviewEvent(ready) => {
+                    EventKind::MarkedAsReadyForReview {}.with(actor!(ready), ready.created_at)
+                }
                 TimelineEvent::ReviewRequestedEvent(req) => EventKind::ReviewRequested {
-                    actor: actor!(req),
                     requested_reviewer: req
                         .requested_reviewer
                         .map(|r| match r {
@@ -345,7 +339,8 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
                         })
                         .unwrap_or_default()
                         .into(),
-                },
+                }
+                .with(actor!(req), req.created_at),
             })
             .collect();
 
@@ -371,7 +366,7 @@ async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<(
         <graphql::IssueTimelineQuery as GraphQLQuery>::ResponseData,
     >(response)?;
 
-    let convert_to_events = move || -> Option<Vec<github::events::EventKind>> {
+    let convert_to_events = move || -> Option<Vec<github::events::Event>> {
         use github::events::EventKind;
         use graphql::issue_timeline_query::*;
         use IssueTimelineQueryRepositoryIssueTimelineItemsEdgesNode as TimelineEvent;
@@ -390,23 +385,23 @@ async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<(
             .into_iter()
             .filter_map(|e| e?.node)
             .map(|node| match node {
-                TimelineEvent::AddedToProjectEvent => EventKind::Unknown("AddedToProjectEvent"),
-                TimelineEvent::CommentDeletedEvent => EventKind::Unknown("CommentDeletedEvent"),
+                TimelineEvent::AddedToProjectEvent => Event::unknown("AddedToProjectEvent"),
+                TimelineEvent::CommentDeletedEvent => Event::unknown("CommentDeletedEvent"),
                 TimelineEvent::ConvertedNoteToIssueEvent => {
-                    EventKind::Unknown("ConvertedNoteToIssueEvent")
+                    Event::unknown("ConvertedNoteToIssueEvent")
                 }
                 TimelineEvent::ConvertedToDiscussionEvent(_) => {
-                    EventKind::Unknown("ConvertedToDiscussionEvent")
+                    Event::unknown("ConvertedToDiscussionEvent")
                 }
-                TimelineEvent::DemilestonedEvent(_) => EventKind::Unknown("DemilestonedEvent"),
-                TimelineEvent::UnsubscribedEvent => EventKind::Unknown("UnsubscribedEvent"),
-                TimelineEvent::UserBlockedEvent => EventKind::Unknown("UserBlockedEvent"),
-                TimelineEvent::TransferredEvent => EventKind::Unknown("TransferredEvent"),
-                TimelineEvent::RemovedFromProjectEvent => EventKind::Unknown("RemovedFromProjectEvent"),
+                TimelineEvent::DemilestonedEvent(_) => Event::unknown("DemilestonedEvent"),
+                TimelineEvent::UnsubscribedEvent => Event::unknown("UnsubscribedEvent"),
+                TimelineEvent::UserBlockedEvent => Event::unknown("UserBlockedEvent"),
+                TimelineEvent::TransferredEvent => Event::unknown("TransferredEvent"),
+                TimelineEvent::RemovedFromProjectEvent => Event::unknown("RemovedFromProjectEvent"),
                 TimelineEvent::MovedColumnsInProjectEvent => {
-                    EventKind::Unknown("MovedColumnsInProjectEvent")
+                    Event::unknown("MovedColumnsInProjectEvent")
                 }
-                TimelineEvent::DisconnectedEvent => EventKind::Unknown("DisconnectedEvent"),
+                TimelineEvent::DisconnectedEvent => Event::unknown("DisconnectedEvent"),
 
                 TimelineEvent::AssignedEvent(assigned) => {
                     let assignee = assigned
@@ -420,10 +415,7 @@ async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<(
                         .unwrap_or_default()
                         .into();
 
-                    EventKind::Assigned {
-                        assignee,
-                        actor: actor!(assigned),
-                    }
+                    EventKind::Assigned { assignee }.with(actor!(assigned), assigned.created_at)
                 }
 
                 TimelineEvent::ClosedEvent(closed) => {
@@ -431,16 +423,13 @@ async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<(
                         Closer::Commit(c) => c.abbreviated_oid.into(),
                         Closer::PullRequest(pr) => pr.number.into(),
                     });
-                    EventKind::Closed {
-                        actor: actor!(closed),
-                        closer,
-                    }
+                    EventKind::Closed { closer }.with(actor!(closed), closed.created_at)
                 }
 
                 TimelineEvent::ConnectedEvent(connected) => EventKind::Connected {
-                    actor: actor!(connected),
                     source: issue_or_pr!(connected.source, ConnectedSource),
-                },
+                }
+                .with(actor!(connected), connected.created_at),
 
                 TimelineEvent::CrossReferencedEvent(cross) => EventKind::CrossReferenced {
                     cross_repository: cross.is_cross_repository.then(|| match cross.source {
@@ -453,19 +442,18 @@ async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<(
                             owner: pr.repository.owner.login.clone().into(),
                         },
                     }),
-                    actor: actor!(cross),
+
                     source: issue_or_pr!(cross.source, CrossRefSource),
-                },
-                TimelineEvent::IssueComment(comment) => EventKind::Commented(events::Comment {
-                    author: actor!(comment, author),
-                    body: comment.body,
-                }),
+                }
+                .with(actor!(cross), cross.created_at),
+                TimelineEvent::IssueComment(comment) => EventKind::Commented { body: comment.body }
+                    .with(actor!(comment, author), comment.created_at),
                 TimelineEvent::LabeledEvent(labeled) => EventKind::Labeled {
-                    actor: actor!(labeled),
                     label: events::Label {
                         name: labeled.label.name,
                     },
-                },
+                }
+                .with(actor!(labeled), labeled.created_at),
 
                 TimelineEvent::LockedEvent(locked) => {
                     let reason = locked.lock_reason.map(|l| match l {
@@ -475,23 +463,20 @@ async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<(
                         LockReason::TOO_HEATED => events::LockReason::TooHeated,
                         LockReason::Other(s) => events::LockReason::Other(s),
                     });
-                    EventKind::Locked {
-                        actor: actor!(locked),
-                        reason,
-                    }
+                    EventKind::Locked { reason }.with(actor!(locked), locked.created_at)
                 }
 
                 TimelineEvent::MarkedAsDuplicateEvent(dup) => EventKind::MarkedAsDuplicate {
-                    actor: actor!(dup),
                     original: dup.canonical.map(|c| issue_or_pr!(c, DuplicateCanonical)),
-                },
+                }
+                .with(actor!(dup), dup.created_at),
                 TimelineEvent::MilestonedEvent(milestone) => EventKind::Milestoned {
-                    actor: actor!(milestone),
                     title: milestone.milestone_title,
-                },
-                TimelineEvent::PinnedEvent(pinned) => EventKind::Pinned {
-                    actor: actor!(pinned),
-                },
+                }
+                .with(actor!(milestone), milestone.created_at),
+                TimelineEvent::PinnedEvent(pinned) => {
+                    EventKind::Pinned {}.with(actor!(pinned), pinned.created_at)
+                }
 
                 TimelineEvent::ReferencedEvent(refer) => {
                     let repo = refer.is_cross_repository.then(|| events::Repository {
@@ -500,20 +485,20 @@ async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<(
                     });
                     let commit_msg = refer.commit.map(|c| c.message_headline).unwrap_or_default();
                     EventKind::Referenced {
-                        actor: actor!(refer),
                         commit_msg_summary: commit_msg,
                         cross_repository: repo,
                     }
+                    .with(actor!(refer), refer.created_at)
                 }
 
                 TimelineEvent::RenamedTitleEvent(rename) => EventKind::Renamed {
-                    actor: actor!(rename),
                     from: rename.previous_title,
                     to: rename.current_title,
-                },
-                TimelineEvent::ReopenedEvent(reopen) => EventKind::Reopened {
-                    actor: actor!(reopen),
-                },
+                }
+                .with(actor!(rename), rename.created_at),
+                TimelineEvent::ReopenedEvent(reopen) => {
+                    EventKind::Reopened {}.with(actor!(reopen), reopen.created_at)
+                }
 
                 TimelineEvent::UnassignedEvent(unassigned) => {
                     let unassignee = unassigned
@@ -528,27 +513,27 @@ async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<(
                         .into();
                     EventKind::Unassigned {
                         assignee: unassignee,
-                        actor: actor!(unassigned),
                     }
+                    .with(actor!(unassigned), unassigned.created_at)
                 }
 
                 TimelineEvent::UnlabeledEvent(unlabeled) => EventKind::Unlabeled {
-                    actor: actor!(unlabeled),
                     label: events::Label {
                         name: unlabeled.label.name,
                     },
-                },
-                TimelineEvent::UnlockedEvent(unlock) => EventKind::Unlocked {
-                    actor: actor!(unlock),
-                },
-                TimelineEvent::UnmarkedAsDuplicateEvent(notdup) => EventKind::UnmarkedAsDuplicate {
-                    actor: actor!(notdup),
-                },
-                TimelineEvent::UnpinnedEvent(unpin) => EventKind::Unpinned {
-                    actor: actor!(unpin),
-                },
-                TimelineEvent::SubscribedEvent => EventKind::Subscribed,
-                TimelineEvent::MentionedEvent => EventKind::Mentioned,
+                }
+                .with(actor!(unlabeled), unlabeled.created_at),
+                TimelineEvent::UnlockedEvent(unlock) => {
+                    EventKind::Unlocked {}.with(actor!(unlock), unlock.created_at)
+                }
+                TimelineEvent::UnmarkedAsDuplicateEvent(notdup) => {
+                    EventKind::UnmarkedAsDuplicate {}.with(actor!(notdup), notdup.created_at)
+                }
+                TimelineEvent::UnpinnedEvent(unpin) => {
+                    EventKind::Unpinned {}.with(actor!(unpin), unpin.created_at)
+                }
+                TimelineEvent::SubscribedEvent => EventKind::Subscribed.anonymous(),
+                TimelineEvent::MentionedEvent => EventKind::Mentioned.anonymous(),
             })
             .collect();
 

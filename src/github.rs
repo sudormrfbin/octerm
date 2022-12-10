@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 
-use self::events::EventKind;
+use self::events::{DateTimeUtc, Event};
 
 #[derive(Clone)]
 pub struct Notification {
@@ -160,6 +160,7 @@ pub struct IssueDeserModel {
     pub author: User,
     pub state: String,
     pub state_reason: Option<String>,
+    pub created_at: DateTimeUtc,
 }
 
 #[derive(Clone)]
@@ -170,6 +171,7 @@ pub struct IssueMeta {
     pub number: usize,
     pub author: User,
     pub state: IssueState,
+    pub created_at: DateTimeUtc,
 }
 
 impl IssueMeta {
@@ -189,6 +191,7 @@ impl IssueMeta {
             number: issue.number,
             author: issue.author,
             state,
+            created_at: issue.created_at,
         }
     }
 }
@@ -231,11 +234,11 @@ impl Display for IssueState {
 
 pub struct Issue {
     pub meta: IssueMeta,
-    pub events: Vec<EventKind>,
+    pub events: Vec<Event>,
 }
 
 impl Issue {
-    pub fn new(meta: IssueMeta, events: Vec<EventKind>) -> Self {
+    pub fn new(meta: IssueMeta, events: Vec<Event>) -> Self {
         Self { meta, events }
     }
 }
@@ -248,6 +251,7 @@ pub struct PullRequestMeta {
     pub number: usize,
     pub author: User,
     pub state: PullRequestState,
+    pub created_at: DateTimeUtc,
 }
 
 impl PullRequestMeta {
@@ -269,6 +273,7 @@ impl PullRequestMeta {
             number: pr.number as usize,
             author: pr.user.map(|u| User::from(*u)).unwrap_or_default(),
             state,
+            created_at: pr.created_at.unwrap_or_default(),
         }
     }
 }
@@ -370,11 +375,11 @@ impl From<String> for User {
 
 pub struct PullRequest {
     pub meta: PullRequestMeta,
-    pub events: Vec<EventKind>,
+    pub events: Vec<Event>,
 }
 
 impl PullRequest {
-    pub fn new(meta: PullRequestMeta, events: Vec<EventKind>) -> Self {
+    pub fn new(meta: PullRequestMeta, events: Vec<Event>) -> Self {
         Self { meta, events }
     }
 }
