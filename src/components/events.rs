@@ -7,6 +7,7 @@ use meow::{
         text::Text,
         Layout, Renderable,
     },
+    layout::Constraint,
     spans,
     style::{Color, Style, Stylize},
 };
@@ -14,7 +15,7 @@ use meow::{
 use crate::{
     github::{
         self,
-        events::{Event, EventKind, Label, ReviewState},
+        events::{DateTimeLocal, Event, EventKind, Label, ReviewState},
         User,
     },
     markdown::Markdown,
@@ -32,11 +33,13 @@ impl EventTimeline {
 
         for event in events {
             let actor = event.actor;
+            let date_time = event.created_at;
+            let date_str = date_time.format("%d %b %Y").to_string();
             let renderable: Box<dyn Renderable> = match event.kind {
                 EventKind::Assigned { assignee } => {
-                    format!("  {actor} assigned {assignee}").boxed()
+                    format!("  {actor} assigned {assignee} on {date_str}").boxed()
                 }
-                EventKind::Commented { body } => Comment::new(body, actor).boxed(),
+                EventKind::Commented { body } => Comment::new(body, actor, date_time).boxed(),
                 EventKind::Unknown(name) => format!("Unhandled event '{name}'")
                     .fg(Color::Red)
                     .italic(true)
@@ -51,6 +54,8 @@ impl EventTimeline {
                         actor.to_string(),
                         " into ",
                         base_branch,
+                        " on ",
+                        date_str,
                     ]
                     .boxed()
                 }
@@ -63,7 +68,9 @@ impl EventTimeline {
                         "  ".fg(Color::Red),
                         " Closed ".bg(Color::Red).fg(Color::Black),
                         " by ",
-                        actor.to_string()
+                        actor.to_string(),
+                        " on ",
+                        date_str,
                     ];
                     if let Some(closer) = closer {
                         let end = match closer {
@@ -83,6 +90,8 @@ impl EventTimeline {
                     " Reopened ".bg(Color::Green).fg(Color::Black),
                     " by ",
                     actor.to_string(),
+                    " on ",
+                    date_str,
                 ]
                 .boxed(),
                 EventKind::Committed {
@@ -96,7 +105,9 @@ impl EventTimeline {
                     actor.to_string(),
                     " added ",
                     name.bold(true),
-                    " label"
+                    " label",
+                    " on ",
+                    date_str,
                 ]
                 .boxed(),
                 EventKind::Unlabeled {
@@ -106,7 +117,9 @@ impl EventTimeline {
                     actor.to_string(),
                     " removed ",
                     name.bold(true),
-                    " label"
+                    " label",
+                    " on ",
+                    date_str,
                 ]
                 .boxed(),
                 EventKind::MarkedAsDuplicate { original } => {
@@ -160,7 +173,9 @@ impl EventTimeline {
                     " force-pushed the branch from ",
                     before.fg(Color::Gray),
                     " to ",
-                    after.fg(Color::Gray)
+                    after.fg(Color::Gray),
+                    " on ",
+                    date_str,
                 ]
                 .boxed(),
                 EventKind::HeadRefDeleted { branch } => {
@@ -180,7 +195,8 @@ impl EventTimeline {
                                 actor.to_string(),
                                 " ",
                                 " reviewed ".bg(Color::Gray).fg(Color::White),
-                                " changes "
+                                " changes on ",
+                                date_str,
                             )
                         }
                         ReviewState::Approved => {
@@ -189,7 +205,8 @@ impl EventTimeline {
                                 actor.to_string(),
                                 " ",
                                 " approved ".bg(Color::Green).fg(Color::Black),
-                                " these changes "
+                                " these changes on ",
+                                date_str,
                             )
                         }
                         ReviewState::ChangesRequested => {
@@ -198,7 +215,8 @@ impl EventTimeline {
                                 actor.to_string(),
                                 " ",
                                 " requested ".bg(Color::Red).fg(Color::Black),
-                                " changes "
+                                " changes on ",
+                                date_str,
                             )
                         }
                         _ => spans![],
@@ -208,7 +226,7 @@ impl EventTimeline {
                         Some(body) => meow::column![
                             state_text,
                             Line::horizontal().blank(),
-                            Comment::new(body, actor),
+                            Comment::new(body, actor, date_time),
                         ]
                         .boxed(),
                         None => state_text.boxed(),
@@ -222,7 +240,7 @@ impl EventTimeline {
                     };
                     Text::new(vec![
                         spans![format!(
-                            "  {actor} linked a {source_typ} that will close this"
+                            "  {actor} linked a {source_typ} that will close this on {date_str}"
                         )],
                         spans![
                             "   ",
@@ -235,19 +253,20 @@ impl EventTimeline {
                     ])
                     .boxed()
                 }
-                EventKind::Locked { reason: _ } => {
-                    format!("  {actor} locked and limited conversation to collaborators").boxed()
-                }
+                EventKind::Locked { reason: _ } => format!(
+                    "  {actor} locked and limited conversation to collaborators on {date_str}"
+                )
+                .boxed(),
                 EventKind::Milestoned { title } => {
-                    format!("  {actor} added this to the {title} milestone").boxed()
+                    format!("  {actor} added this to the {title} milestone on {date_str}").boxed()
                 }
 
-                EventKind::Pinned {} => format!("  {actor} pinned this").boxed(),
-                EventKind::Unpinned {} => format!("  {actor} unpinned this").boxed(),
+                EventKind::Pinned {} => format!("  {actor} pinned this on {date_str}").boxed(),
+                EventKind::Unpinned {} => format!("  {actor} unpinned this on {date_str}").boxed(),
                 EventKind::Unassigned { assignee } => {
-                    format!("  {actor} unassigned {assignee}").boxed()
+                    format!("  {actor} unassigned {assignee} on {date_str}").boxed()
                 }
-                EventKind::Unlocked {} => format!("  {actor} unlocked this").boxed(),
+                EventKind::Unlocked {} => format!("  {actor} unlocked this on {date_str}").boxed(),
 
                 EventKind::Referenced {
                     commit_msg_summary,
@@ -267,14 +286,15 @@ impl EventTimeline {
                 EventKind::Mentioned | EventKind::Subscribed => continue,
 
                 EventKind::MarkedAsDraft {} => {
-                    format!("  {actor} marked this pull request as draft").boxed()
+                    format!("  {actor} marked this pull request as draft on {date_str}").boxed()
                 }
                 EventKind::MarkedAsReadyForReview {} => {
-                    format!("  {actor} marked this pull request as ready for review").boxed()
+                    format!("  {actor} marked this pull request as ready for review on {date_str}")
+                        .boxed()
                 }
                 EventKind::ReviewRequested {
                     requested_reviewer: reviewer,
-                } => format!("  {actor} requested a review from {reviewer}").boxed(),
+                } => format!("  {actor} requested a review from {reviewer} on {date_str}").boxed(),
             };
 
             layout.push(renderable).push(Line::horizontal().blank());
@@ -299,16 +319,18 @@ pub struct Comment {
 }
 
 impl Comment {
-    pub fn new(body: String, author: User) -> Self {
-        let mut layout = Layout::vertical();
+    pub fn new(body: String, author: User, created_at: DateTimeLocal) -> Self {
         let header_bg = Color::Blue;
         let header_fg = Color::Black;
+        let mut header = Layout::horizontal();
+        header
+            .push(format!(" {} ", author).bold(true))
+            .push_constrained("", Constraint::weak().gte().length(1))
+            .push(created_at.format("%a, %d %b %Y %H:%M ").to_string());
+
+        let mut layout = Layout::vertical();
         layout
-            .push(
-                Container::new(format!(" {}", author).bold(true))
-                    .bg(header_bg)
-                    .fg(header_fg),
-            )
+            .push(Container::new(header).bg(header_bg).fg(header_fg))
             .push(
                 Border::new(Padding::new(Markdown::new(body.into())).top(1))
                     .top(false)
