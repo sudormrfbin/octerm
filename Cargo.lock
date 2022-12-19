@@ -926,6 +926,7 @@ name = "meow-tui"
 version = "0.1.0"
 dependencies = [
  "cassowary",
+ "finl_unicode",
  "termwiz",
 ]
 

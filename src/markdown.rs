@@ -9,7 +9,7 @@ use meow::{
         line::Line,
         scroll::Scrollable,
         text::{Span, Spans, Text},
-        Layout, Renderable,
+        Layout, Renderable, SizeArgs,
     },
     style::{Color, Style, Stylize},
 };
@@ -55,8 +55,8 @@ impl<'t> Renderable for Markdown<'t> {
         self.components.render(surface)
     }
 
-    fn size(&self) -> (meow::components::Width, meow::components::Height) {
-        self.components.size()
+    fn size(&self, args: SizeArgs) -> (meow::components::Width, meow::components::Height) {
+        self.components.size(args)
     }
 }
 
@@ -221,8 +221,8 @@ impl<R: Renderable> Renderable for BlockQuote<R> {
             .render(surface);
     }
 
-    fn size(&self) -> (meow::components::Width, meow::components::Height) {
-        let (width, height) = self.child.size();
+    fn size(&self, args: SizeArgs) -> (meow::components::Width, meow::components::Height) {
+        let (width, height) = self.child.size(args);
         (width.saturating_add(2), height)
     }
 }

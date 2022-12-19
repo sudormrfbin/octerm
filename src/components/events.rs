@@ -5,7 +5,7 @@ use meow::{
         line::Line,
         padding::Padding,
         text::Text,
-        Layout, Renderable,
+        Layout, Renderable, SizeArgs,
     },
     layout::Constraint,
     spans,
@@ -309,8 +309,8 @@ impl Renderable for EventTimeline {
         self.events.render(surface)
     }
 
-    fn size(&self) -> (meow::components::Width, meow::components::Height) {
-        self.events.size()
+    fn size(&self, args: SizeArgs) -> (meow::components::Width, meow::components::Height) {
+        self.events.size(args)
     }
 }
 
@@ -348,7 +348,7 @@ impl Renderable for Comment {
         self.body.render(surface)
     }
 
-    fn size(&self) -> (meow::components::Width, meow::components::Height) {
-        self.body.size()
+    fn size(&self, args: SizeArgs) -> (meow::components::Width, meow::components::Height) {
+        self.body.size(args)
     }
 }

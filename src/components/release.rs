@@ -1,5 +1,5 @@
 use crate::markdown::Markdown;
-use meow::components::{Component, Renderable};
+use meow::components::{Component, Renderable, SizeArgs};
 use meow::style::Stylize;
 use meow::{
     column,
@@ -44,8 +44,8 @@ impl Renderable for ReleaseView {
         self.body.render(surface)
     }
 
-    fn size(&self) -> (meow::components::Width, meow::components::Height) {
-        self.body.size()
+    fn size(&self, args: SizeArgs) -> (meow::components::Width, meow::components::Height) {
+        self.body.size(args)
     }
 }
 

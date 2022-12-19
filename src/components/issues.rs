@@ -2,7 +2,7 @@ use meow::{
     components::{
         line::Line,
         scroll::{Scroll, ScrollMsg},
-        Component, Layout, Renderable,
+        Component, Layout, Renderable, SizeArgs,
     },
     key, spans,
     style::{Color, Stylize},
@@ -59,8 +59,8 @@ impl Renderable for IssueView {
         self.body.render(surface)
     }
 
-    fn size(&self) -> (meow::components::Width, meow::components::Height) {
-        self.body.size()
+    fn size(&self, args: SizeArgs) -> (meow::components::Width, meow::components::Height) {
+        self.body.size(args)
     }
 }
 

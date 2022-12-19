@@ -1,5 +1,5 @@
 use meow::{
-    components::{Component, List, ListMsg, Renderable, Span},
+    components::{Component, List, ListMsg, Renderable, Span, SizeArgs},
     key, spans,
     style::{Color, Style},
 };
@@ -55,8 +55,8 @@ impl Renderable for NotificationsView {
         self.list.render(surface)
     }
 
-    fn size(&self) -> (meow::components::Width, meow::components::Height) {
-        self.list.size()
+    fn size(&self, args: SizeArgs) -> (meow::components::Width, meow::components::Height) {
+        self.list.size(args)
     }
 }
 
