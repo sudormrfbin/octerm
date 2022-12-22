@@ -5,7 +5,7 @@ use std::{
 
 use meow::{
     components::{
-        container::Container,
+        container::{Container, DimensionLen},
         line::Line,
         scroll::Scrollable,
         text::{Span, Spans, Text},
@@ -162,7 +162,11 @@ pub fn parse<'a, I: Iterator<Item = Event<'a>>>(
                         // line breaks in codeblocks are not reported as events
                         let code = Text::from(text.deref()).cloned();
                         flush_lines(&mut column, &mut lines);
-                        column.push(Container::new(code).bg(Color::Gray).width(usize::MAX));
+                        column.push(
+                            Container::new(code)
+                                .bg(Color::Gray)
+                                .width(DimensionLen::Max),
+                        );
                     }
                     Some(Tag::Strikethrough) => spans.push(Span::new(text).strikethrough(true)),
                     Some(_) | None => spans.push(Span::new(text)),

@@ -129,8 +129,7 @@ impl App for MdRenderApp {
 
     fn view<'m>(model: &'m Self::Model) -> Box<dyn meow::components::Renderable + 'm> {
         let column = meow::column![
-            &model.text,
-            Line::horizontal().blank() => Constraint::weak().gte().length(1),
+            &model.text => Constraint::strong().gte().length(1),
             model.md_file.as_ref().map(|f| f.to_string_lossy().into_owned().reverse(true)).unwrap_or_default() => Constraint::strong().eq().length(1),
         ];
 

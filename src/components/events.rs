@@ -81,7 +81,7 @@ impl EventTimeline {
                                 format!(" in #{number}")
                             }
                         };
-                        spans.0.push(end.into());
+                        spans.fragments.push(end.into());
                     }
                     spans.boxed()
                 }
