@@ -69,8 +69,8 @@ pub struct Model {
 
 impl Model {
     fn update_notif_view_msg(&mut self, msg: NotificationsViewMsg) -> Cmd<ServerRequest> {
-        let mut open_notif = |notifs: &mut NotificationsView| {
-            let notif = notifs.selected();
+        let open_notif = |model: &mut Model| {
+            let notif = model.notifs.selected();
             match notif.target {
                 github::NotificationTarget::Issue(ref meta) => {
                     ServerRequest::OpenIssue(meta.clone()).into()
@@ -79,7 +79,7 @@ impl Model {
                     ServerRequest::OpenPullRequest(meta.clone()).into()
                 }
                 github::NotificationTarget::Release(ref release) => {
-                    self.route = Some(Route::Release(release.clone().into()));
+                    model.route = Some(Route::Release(release.clone().into()));
                     Cmd::None
                 }
                 _ => Cmd::None,
@@ -94,20 +94,21 @@ impl Model {
             NotificationsViewMsg::MarkAsRead => {
                 let mark_as_read = ServerRequest::MarkNotifAsRead(self.notifs.selected().clone());
                 self.notifs.list.update::<ServerRequest>(ListMsg::NextItem);
-                match open_notif(&mut self.notifs) {
+                self.route = None;
+                match open_notif(self) {
                     Cmd::ServerRequest(open) => Cmd::ServerRequests(vec![mark_as_read, open]),
                     _ => mark_as_read.into(),
                 }
             }
-            NotificationsViewMsg::Open => open_notif(&mut self.notifs),
+            NotificationsViewMsg::Open => open_notif(self),
             NotificationsViewMsg::CloseView => Cmd::Quit,
             NotificationsViewMsg::OpenNext => {
                 self.notifs.list.update::<ServerRequest>(ListMsg::NextItem);
-                open_notif(&mut self.notifs)
+                open_notif(self)
             }
             NotificationsViewMsg::OpenPrevious => {
                 self.notifs.list.update::<ServerRequest>(ListMsg::PrevItem);
-                open_notif(&mut self.notifs)
+                open_notif(self)
             }
             _ => self.notifs.update(msg),
         }
