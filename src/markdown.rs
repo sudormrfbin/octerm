@@ -173,9 +173,7 @@ pub fn parse<'a, I: Iterator<Item = Event<'a>>>(
                 }
             }
             Event::Code(text) => {
-                spans.push(Span::new("▐"));
-                spans.push(Span::new(text).style(code_style.clone()));
-                spans.push(Span::new("▌"));
+                spans.push(Span::new(format!(" {text} ")).style(code_style.clone()));
             }
             Event::Html(text) => {
                 for line in text.lines() {
