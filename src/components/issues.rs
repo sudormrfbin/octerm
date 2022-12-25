@@ -14,7 +14,6 @@ use super::events::EventTimeline;
 
 pub enum IssueViewMsg {
     Scroll(ScrollMsg),
-    OpenInBrowser,
     CloseView,
 }
 
@@ -70,7 +69,6 @@ impl Component for IssueView {
     fn event_to_msg(&self, event: meow::AppEvent) -> Option<Self::Msg> {
         match event {
             key!('q') => Some(IssueViewMsg::CloseView),
-            key!('o') => Some(IssueViewMsg::OpenInBrowser),
             _ => self.body.event_to_msg(event).map(IssueViewMsg::Scroll),
         }
     }

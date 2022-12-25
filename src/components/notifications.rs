@@ -67,11 +67,13 @@ impl Component for NotificationsView {
 
     fn event_to_msg(&self, event: meow::AppEvent) -> Option<Self::Msg> {
         match event {
-            key!('q') => Some(NotificationsViewMsg::CloseView),
-            key!('o') => Some(NotificationsViewMsg::OpenInBrowser),
-            key!('R') => Some(NotificationsViewMsg::Refresh),
-            key!('d') => Some(NotificationsViewMsg::MarkAsRead),
-            key!(Enter) => Some(NotificationsViewMsg::Open),
+            key!('q') => Some(Self::Msg::CloseView),
+            key!('o') => Some(Self::Msg::OpenInBrowser),
+            key!('R') => Some(Self::Msg::Refresh),
+            key!('d') => Some(Self::Msg::MarkAsRead),
+            key!(Enter) => Some(Self::Msg::Open),
+            key!(']') => Some(Self::Msg::OpenNext),
+            key!('[') => Some(Self::Msg::OpenPrevious),
             _ => self.list.event_to_msg(event).map(Self::Msg::ListMsg),
         }
     }

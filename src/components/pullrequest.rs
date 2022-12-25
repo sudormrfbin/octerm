@@ -14,7 +14,6 @@ use super::events::EventTimeline;
 
 pub enum PullRequestViewMsg {
     Scroll(ScrollMsg),
-    OpenInBrowser,
     CloseView,
 }
 
@@ -66,7 +65,6 @@ impl Component for PullRequestView {
     fn event_to_msg(&self, event: meow::AppEvent) -> Option<Self::Msg> {
         match event {
             key!('q') => Some(PullRequestViewMsg::CloseView),
-            key!('o') => Some(PullRequestViewMsg::OpenInBrowser),
             _ => self
                 .body
                 .event_to_msg(event)

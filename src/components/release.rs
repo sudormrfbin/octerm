@@ -16,7 +16,6 @@ use crate::github;
 
 pub enum ReleaseViewMsg {
     Scroll(ScrollMsg),
-    OpenInBrowser,
     CloseView,
 }
 
@@ -55,7 +54,6 @@ impl Component for ReleaseView {
     fn event_to_msg(&self, event: meow::AppEvent) -> Option<Self::Msg> {
         match event {
             key!('q') => Some(ReleaseViewMsg::CloseView),
-            key!('o') => Some(ReleaseViewMsg::OpenInBrowser),
             _ => self.body.event_to_msg(event).map(ReleaseViewMsg::Scroll),
         }
     }
@@ -63,7 +61,6 @@ impl Component for ReleaseView {
     fn update<Request>(&mut self, msg: Self::Msg) -> meow::Cmd<Request> {
         match msg {
             ReleaseViewMsg::Scroll(msg) => self.body.update(msg),
-            ReleaseViewMsg::OpenInBrowser => Cmd::None,
             ReleaseViewMsg::CloseView => Cmd::None,
         }
     }

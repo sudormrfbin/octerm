@@ -92,7 +92,12 @@ impl Model {
                 ServerRequest::OpenNotifInBrowser(self.notifs.selected().clone()).into()
             }
             NotificationsViewMsg::MarkAsRead => {
-                ServerRequest::MarkNotifAsRead(self.notifs.selected().clone()).into()
+                let mark_as_read = ServerRequest::MarkNotifAsRead(self.notifs.selected().clone());
+                self.notifs.list.update::<ServerRequest>(ListMsg::NextItem);
+                match open_notif(&mut self.notifs) {
+                    Cmd::ServerRequest(open) => Cmd::ServerRequests(vec![mark_as_read, open]),
+                    _ => mark_as_read.into(),
+                }
             }
             NotificationsViewMsg::Open => open_notif(&mut self.notifs),
             NotificationsViewMsg::CloseView => Cmd::Quit,
@@ -114,13 +119,6 @@ impl Model {
                 self.route = None;
                 Cmd::None
             }
-            IssueViewMsg::OpenInBrowser => {
-                // HACK: Ideally we want to open the issue using the issue number
-                // stored in the IssueView model instead of relying on the state
-                // of another component that is not even in view. But since we
-                // don't have a model and only reuse an IssueView, this is a hack.
-                ServerRequest::OpenNotifInBrowser(self.notifs.selected().clone()).into()
-            }
             _ => match self.route {
                 Some(Route::Issue(ref mut issue)) => issue.update(msg),
                 _ => Cmd::None,
@@ -134,9 +132,6 @@ impl Model {
                 self.route = None;
                 Cmd::None
             }
-            PullRequestViewMsg::OpenInBrowser => {
-                ServerRequest::OpenNotifInBrowser(self.notifs.selected().clone()).into()
-            }
             _ => match self.route {
                 Some(Route::PullRequest(ref mut pr)) => pr.update(msg),
                 _ => Cmd::None,
@@ -147,9 +142,6 @@ impl Model {
     fn update_release_view_msg(&mut self, msg: ReleaseViewMsg) -> Cmd<ServerRequest> {
         match msg {
             ReleaseViewMsg::CloseView => self.route = None,
-            ReleaseViewMsg::OpenInBrowser => {
-                return ServerRequest::OpenNotifInBrowser(self.notifs.selected().clone()).into()
-            }
             _ => {
                 if let Some(Route::Release(ref mut release)) = self.route {
                     return release.update(msg);
@@ -169,14 +161,22 @@ impl Model {
                     meow::components::ListStateSync::Reset
                 });
             }
-            ServerResponse::MarkedNotifAsRead(n) => self.notifs.list.value_mut(|list| {
-                let pos = list.iter().position(|no| no == &n);
-                if let Some(pos) = pos {
-                    list.remove(pos);
-                }
+            ServerResponse::MarkedNotifAsRead(n) => {
+                let mut idx = self.notifs.list.selected_index();
 
-                meow::components::ListStateSync::Adjust
-            }),
+                self.notifs.list.value_mut(|list| {
+                    let pos = list.iter().position(|no| no == &n);
+                    if let Some(pos) = pos {
+                        idx = idx.saturating_sub(1);
+                        list.remove(pos);
+                    }
+
+                    meow::components::ListStateSync::Adjust
+                });
+
+                // Reposition the cursor to the previously selected item.
+                self.notifs.list.set_selected_index(idx);
+            }
             ServerResponse::AsyncTaskStart => self.async_task_doing = true,
             ServerResponse::AsyncTaskDone => self.async_task_doing = false,
             ServerResponse::Error(err) => self.error = Some(err),
@@ -279,13 +279,10 @@ impl App for OctermApp {
     }
 
     fn event_to_msg(event: meow::AppEvent, model: &Self::Model) -> Option<Self::Msg> {
+        let event_cloned = event.clone();
         match event {
             key!(Escape) => Some(Msg::ClearError),
-            key!(']') => Some(Msg::NotifViewMsg(NotificationsViewMsg::OpenNext)),
-            key!('[') => Some(Msg::NotifViewMsg(NotificationsViewMsg::OpenPrevious)),
-            key!('d') => Some(Msg::NotifViewMsg(NotificationsViewMsg::MarkAsRead)),
             _ => match model.route {
-                None => model.notifs.event_to_msg(event).map(Msg::NotifViewMsg),
                 Some(Route::Issue(ref issue)) => issue.event_to_msg(event).map(Msg::IssueViewMsg),
                 Some(Route::Release(ref release)) => {
                     release.event_to_msg(event).map(Msg::ReleaseViewMsg)
@@ -293,7 +290,14 @@ impl App for OctermApp {
                 Some(Route::PullRequest(ref pr)) => {
                     pr.event_to_msg(event).map(Msg::PullRequestViewMsg)
                 }
-            },
+                None => None,
+            }
+            .or_else(|| {
+                model
+                    .notifs
+                    .event_to_msg(event_cloned)
+                    .map(Msg::NotifViewMsg)
+            }),
         }
     }
 
