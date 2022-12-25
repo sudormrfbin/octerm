@@ -37,7 +37,6 @@ impl FromResponse<ServerResponse> for Msg {
 }
 
 pub enum Route {
-    Notifications,
     Issue(components::IssueView),
     PullRequest(components::PullRequestView),
     Release(components::ReleaseView),
@@ -64,7 +63,7 @@ pub enum ServerResponse {
 pub struct Model {
     notifs: NotificationsView,
     async_task_doing: bool,
-    route: Route,
+    route: Option<Route>,
     error: Option<Error>,
 }
 
@@ -88,7 +87,7 @@ impl Model {
                         ServerRequest::OpenPullRequest(meta.clone()).into()
                     }
                     github::NotificationTarget::Release(ref release) => {
-                        self.route = Route::Release(release.clone().into());
+                        self.route = Some(Route::Release(release.clone().into()));
                         Cmd::None
                     }
                     _ => Cmd::None,
@@ -102,7 +101,7 @@ impl Model {
     fn update_issue_view_msg(&mut self, msg: IssueViewMsg) -> Cmd<ServerRequest> {
         match msg {
             IssueViewMsg::CloseView => {
-                self.route = Route::Notifications;
+                self.route = None;
                 Cmd::None
             }
             IssueViewMsg::OpenInBrowser => {
@@ -113,7 +112,7 @@ impl Model {
                 ServerRequest::OpenNotifInBrowser(self.notifs.selected().clone()).into()
             }
             _ => match self.route {
-                Route::Issue(ref mut issue) => issue.update(msg),
+                Some(Route::Issue(ref mut issue)) => issue.update(msg),
                 _ => Cmd::None,
             },
         }
@@ -122,26 +121,27 @@ impl Model {
     fn update_pr_view_msg(&mut self, msg: PullRequestViewMsg) -> Cmd<ServerRequest> {
         match msg {
             PullRequestViewMsg::CloseView => {
-                self.route = Route::Notifications;
+                self.route = None;
                 Cmd::None
             }
             PullRequestViewMsg::OpenInBrowser => {
                 ServerRequest::OpenNotifInBrowser(self.notifs.selected().clone()).into()
             }
             _ => match self.route {
-                Route::PullRequest(ref mut pr) => pr.update(msg),
+                Some(Route::PullRequest(ref mut pr)) => pr.update(msg),
                 _ => Cmd::None,
             },
         }
     }
+
     fn update_release_view_msg(&mut self, msg: ReleaseViewMsg) -> Cmd<ServerRequest> {
         match msg {
-            ReleaseViewMsg::CloseView => self.route = Route::Notifications,
+            ReleaseViewMsg::CloseView => self.route = None,
             ReleaseViewMsg::OpenInBrowser => {
                 return ServerRequest::OpenNotifInBrowser(self.notifs.selected().clone()).into()
             }
             _ => {
-                if let Route::Release(ref mut release) = self.route {
+                if let Some(Route::Release(ref mut release)) = self.route {
                     return release.update(msg);
                 }
             }
@@ -171,10 +171,10 @@ impl Model {
             ServerResponse::AsyncTaskDone => self.async_task_doing = false,
             ServerResponse::Error(err) => self.error = Some(err),
             ServerResponse::Issue(issue) => {
-                self.route = Route::Issue(issue.into());
+                self.route = Some(Route::Issue(issue.into()));
             }
             ServerResponse::PullRequest(pr) => {
-                self.route = Route::PullRequest(pr.into());
+                self.route = Some(Route::PullRequest(pr.into()));
             }
         }
         Cmd::None
@@ -191,13 +191,13 @@ impl Model {
         }
 
         match self.route {
-            Route::Notifications => {
+            None => {
                 let header = format!(" Notifications • {} ", self.notifs.list.value().len())
                     .bg(Color::Blue)
                     .fg(Color::Black);
                 statusline.push(header);
             }
-            Route::Issue(_) => {
+            Some(Route::Issue(_)) => {
                 if let Notification {
                     target: target @ NotificationTarget::Issue(issue),
                     ..
@@ -213,7 +213,7 @@ impl Model {
                     statusline.push(header).push(" ").push(&issue.title);
                 }
             }
-            Route::PullRequest(_) => {
+            Some(Route::PullRequest(_)) => {
                 if let Notification {
                     target: target @ NotificationTarget::PullRequest(pr),
                     ..
@@ -226,7 +226,7 @@ impl Model {
                     statusline.push(header).push(" ").push(&pr.title);
                 }
             }
-            Route::Release(_) => {
+            Some(Route::Release(_)) => {
                 if let Notification {
                     target: target @ NotificationTarget::Release(rel),
                     ..
@@ -263,7 +263,7 @@ impl App for OctermApp {
         Model {
             notifs: NotificationsView::new(),
             async_task_doing: false,
-            route: Route::Notifications,
+            route: None,
             error: None,
         }
     }
@@ -272,10 +272,14 @@ impl App for OctermApp {
         match event {
             key!(Escape) => Some(Msg::ClearError),
             _ => match model.route {
-                Route::Notifications => model.notifs.event_to_msg(event).map(Msg::NotifViewMsg),
-                Route::Issue(ref issue) => issue.event_to_msg(event).map(Msg::IssueViewMsg),
-                Route::Release(ref release) => release.event_to_msg(event).map(Msg::ReleaseViewMsg),
-                Route::PullRequest(ref pr) => pr.event_to_msg(event).map(Msg::PullRequestViewMsg),
+                None => model.notifs.event_to_msg(event).map(Msg::NotifViewMsg),
+                Some(Route::Issue(ref issue)) => issue.event_to_msg(event).map(Msg::IssueViewMsg),
+                Some(Route::Release(ref release)) => {
+                    release.event_to_msg(event).map(Msg::ReleaseViewMsg)
+                }
+                Some(Route::PullRequest(ref pr)) => {
+                    pr.event_to_msg(event).map(Msg::PullRequestViewMsg)
+                }
             },
         }
     }
@@ -296,25 +300,32 @@ impl App for OctermApp {
     }
 
     fn view<'m>(model: &'m Self::Model) -> Box<dyn meow::components::Renderable + 'm> {
-        let mut column = Layout::vertical();
+        let mut notif_view = Layout::horizontal();
+        notif_view
+            .push_constrained(&model.notifs, Constraint::medium().eq().ratio(1, 2))
+            .push_constrained(Line::vertical(), Constraint::strong().eq().length(1));
+
         match model.route {
-            Route::Notifications => column.push(&model.notifs),
-            Route::Issue(ref issue) => column.push(issue),
-            Route::Release(ref release) => column.push(release),
-            Route::PullRequest(ref pr) => column.push(pr),
-        };
+            Some(Route::Issue(ref issue)) => notif_view.push(issue),
+            Some(Route::Release(ref release)) => notif_view.push(release),
+            Some(Route::PullRequest(ref pr)) => notif_view.push(pr),
+            None => notif_view.push(Empty),
+        }
+        .constrain(Constraint::medium().eq().ratio(1, 2));
 
         let statusline = Container::new(model.statusline())
             .bg(Color::BrightWhite)
             .fg(Color::Black);
 
-        column
+        let mut main_view = Layout::vertical();
+        main_view
+            .push(notif_view)
             .push_constrained(
                 Line::horizontal().blank(),
                 Constraint::weak().gte().length(0),
             )
             .push_constrained(statusline, Constraint::strong().eq().length(1));
 
-        Box::new(column)
+        Box::new(main_view)
     }
 }
