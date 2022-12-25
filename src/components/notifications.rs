@@ -9,6 +9,8 @@ use crate::{github, util::notif_target_color};
 pub enum NotificationsViewMsg {
     CloseView,
     Open,
+    OpenNext,
+    OpenPrevious,
     OpenInBrowser,
     Refresh,
     MarkAsRead,

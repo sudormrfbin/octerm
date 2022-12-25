@@ -11,7 +11,7 @@ use components::{
 };
 use github::{Issue, IssueMeta, NotificationTarget, PullRequest, PullRequestMeta};
 use meow::{
-    components::{container::Container, empty::Empty, line::Line, Component, Layout},
+    components::{container::Container, empty::Empty, line::Line, Component, Layout, ListMsg},
     key,
     layout::Constraint,
     style::{Color, Stylize},
@@ -69,6 +69,23 @@ pub struct Model {
 
 impl Model {
     fn update_notif_view_msg(&mut self, msg: NotificationsViewMsg) -> Cmd<ServerRequest> {
+        let mut open_notif = |notifs: &mut NotificationsView| {
+            let notif = notifs.selected();
+            match notif.target {
+                github::NotificationTarget::Issue(ref meta) => {
+                    ServerRequest::OpenIssue(meta.clone()).into()
+                }
+                github::NotificationTarget::PullRequest(ref meta) => {
+                    ServerRequest::OpenPullRequest(meta.clone()).into()
+                }
+                github::NotificationTarget::Release(ref release) => {
+                    self.route = Some(Route::Release(release.clone().into()));
+                    Cmd::None
+                }
+                _ => Cmd::None,
+            }
+        };
+
         match msg {
             NotificationsViewMsg::Refresh => ServerRequest::RefreshNotifs.into(),
             NotificationsViewMsg::OpenInBrowser => {
@@ -77,23 +94,16 @@ impl Model {
             NotificationsViewMsg::MarkAsRead => {
                 ServerRequest::MarkNotifAsRead(self.notifs.selected().clone()).into()
             }
-            NotificationsViewMsg::Open => {
-                let notif = self.notifs.selected();
-                match notif.target {
-                    github::NotificationTarget::Issue(ref meta) => {
-                        ServerRequest::OpenIssue(meta.clone()).into()
-                    }
-                    github::NotificationTarget::PullRequest(ref meta) => {
-                        ServerRequest::OpenPullRequest(meta.clone()).into()
-                    }
-                    github::NotificationTarget::Release(ref release) => {
-                        self.route = Some(Route::Release(release.clone().into()));
-                        Cmd::None
-                    }
-                    _ => Cmd::None,
-                }
-            }
+            NotificationsViewMsg::Open => open_notif(&mut self.notifs),
             NotificationsViewMsg::CloseView => Cmd::Quit,
+            NotificationsViewMsg::OpenNext => {
+                self.notifs.list.update::<ServerRequest>(ListMsg::NextItem);
+                open_notif(&mut self.notifs)
+            }
+            NotificationsViewMsg::OpenPrevious => {
+                self.notifs.list.update::<ServerRequest>(ListMsg::PrevItem);
+                open_notif(&mut self.notifs)
+            }
             _ => self.notifs.update(msg),
         }
     }
@@ -271,6 +281,8 @@ impl App for OctermApp {
     fn event_to_msg(event: meow::AppEvent, model: &Self::Model) -> Option<Self::Msg> {
         match event {
             key!(Escape) => Some(Msg::ClearError),
+            key!(']') => Some(Msg::NotifViewMsg(NotificationsViewMsg::OpenNext)),
+            key!('[') => Some(Msg::NotifViewMsg(NotificationsViewMsg::OpenPrevious)),
             _ => match model.route {
                 None => model.notifs.event_to_msg(event).map(Msg::NotifViewMsg),
                 Some(Route::Issue(ref issue)) => issue.event_to_msg(event).map(Msg::IssueViewMsg),
