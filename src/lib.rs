@@ -283,6 +283,7 @@ impl App for OctermApp {
             key!(Escape) => Some(Msg::ClearError),
             key!(']') => Some(Msg::NotifViewMsg(NotificationsViewMsg::OpenNext)),
             key!('[') => Some(Msg::NotifViewMsg(NotificationsViewMsg::OpenPrevious)),
+            key!('d') => Some(Msg::NotifViewMsg(NotificationsViewMsg::MarkAsRead)),
             _ => match model.route {
                 None => model.notifs.event_to_msg(event).map(Msg::NotifViewMsg),
                 Some(Route::Issue(ref issue)) => issue.event_to_msg(event).map(Msg::IssueViewMsg),
