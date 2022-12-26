@@ -4,8 +4,6 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{error::Result, network::graphql};
-
 use self::events::{DateTimeUtc, Event};
 
 #[derive(Clone)]
@@ -66,83 +64,6 @@ impl Notification {
         };
 
         (irrelavance, std::cmp::Reverse(self.inner.updated_at))
-    }
-
-    /// Fetch additional information about the notification from the octocrab
-    /// Notification model and construct a [`Notification`].
-    pub async fn from_octocrab(notif: octocrab::models::activity::Notification) -> Result<Self> {
-        let target = match (notif.subject.r#type.as_str(), notif.subject.url.as_ref()) {
-            ("Issue", Some(url)) => {
-                let issue: IssueDeserModel = octocrab::instance().get(url, None::<&()>).await?;
-                NotificationTarget::Issue(IssueMeta::new(issue, RepoMeta::from(&notif.repository)))
-            }
-            ("PullRequest", Some(url)) => {
-                let pr: octocrab::models::pulls::PullRequest =
-                    octocrab::instance().get(url, None::<&()>).await?;
-                NotificationTarget::PullRequest(PullRequestMeta::new(
-                    pr,
-                    RepoMeta::from(&notif.repository),
-                ))
-            }
-            ("Release", Some(url)) => {
-                let release: octocrab::models::repos::Release =
-                    octocrab::instance().get(url, None::<&()>).await?;
-                NotificationTarget::Release(release.into())
-            }
-            ("Discussion", _) => {
-                let query_vars = graphql::discussion_search_query::Variables {
-                    search: format!(
-                        "repo:{}/{} {}",
-                        notif
-                            .repository
-                            .owner
-                            .as_ref()
-                            .map(|u| u.login.clone())
-                            .unwrap_or_default(),
-                        notif.repository.name,
-                        notif.subject.title
-                    ),
-                };
-                let data = graphql::query::<graphql::DiscussionSearchQuery>(
-                    query_vars,
-                    &octocrab::instance(),
-                )
-                .await?;
-                let convert_to_meta = || -> Option<DiscussionMeta> {
-                    use graphql::discussion_search_query::DiscussionSearchQuerySearchEdgesNode as ResultType;
-
-                    data?
-                        .search
-                        .edges?
-                        .into_iter()
-                        .next()??
-                        .node
-                        .and_then(|res| match res {
-                            ResultType::Discussion(d) => Some(DiscussionMeta {
-                                repo: RepoMeta::from(&notif.repository),
-                                title: notif.subject.title.clone(),
-                                state: match d.answer_chosen_at {
-                                    Some(_) => DiscussionState::Answered,
-                                    None => DiscussionState::Unanswered,
-                                },
-                                number: d.number as usize,
-                            }),
-                            _ => None,
-                        })
-                };
-
-                convert_to_meta()
-                    .map(NotificationTarget::Discussion)
-                    .unwrap_or(NotificationTarget::Unknown)
-            }
-            ("CheckSuite", _) => NotificationTarget::CiBuild,
-            (_, _) => NotificationTarget::Unknown,
-        };
-
-        Ok(Notification {
-            inner: notif,
-            target,
-        })
     }
 }
 

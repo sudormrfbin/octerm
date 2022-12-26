@@ -10,7 +10,10 @@ use tokio::task::JoinHandle;
 
 use crate::error::{Error, Result};
 use crate::github::events::Event;
-use crate::github::{self, events, Issue, IssueMeta, Notification, PullRequest, PullRequestMeta};
+use crate::github::{
+    self, events, DiscussionMeta, DiscussionState, Issue, IssueDeserModel, IssueMeta, Notification,
+    NotificationTarget, PullRequest, PullRequestMeta, RepoMeta,
+};
 use crate::{ServerRequest, ServerResponse};
 
 type Channel = ServerChannel<ServerRequest, ServerResponse>;
@@ -585,7 +588,7 @@ pub async fn refresh(send: impl Fn(ServerResponse)) -> Result<()> {
     let notifs = get_all_notifs().await?;
     let tasks: Vec<JoinHandle<Result<Notification>>> = notifs
         .into_iter()
-        .map(|n| tokio::spawn(Notification::from_octocrab(n)))
+        .map(|n| tokio::spawn(octo_notif_to_notif(n)))
         .collect();
 
     // TODO: Buffer the requests
@@ -664,6 +667,83 @@ pub async fn mark_as_read(send: impl Fn(ServerResponse), notif: Notification) ->
     send(ServerResponse::MarkedNotifAsRead(notif));
 
     Ok(())
+}
+
+/// Fetch additional information about the notification from the octocrab
+/// Notification model and construct a [`Notification`].
+pub async fn octo_notif_to_notif(
+    notif: octocrab::models::activity::Notification,
+) -> Result<Notification> {
+    let target = match (notif.subject.r#type.as_str(), notif.subject.url.as_ref()) {
+        ("Issue", Some(url)) => {
+            let issue: IssueDeserModel = octocrab::instance().get(url, None::<&()>).await?;
+            NotificationTarget::Issue(IssueMeta::new(issue, RepoMeta::from(&notif.repository)))
+        }
+        ("PullRequest", Some(url)) => {
+            let pr: octocrab::models::pulls::PullRequest =
+                octocrab::instance().get(url, None::<&()>).await?;
+            NotificationTarget::PullRequest(PullRequestMeta::new(
+                pr,
+                RepoMeta::from(&notif.repository),
+            ))
+        }
+        ("Release", Some(url)) => {
+            let release: octocrab::models::repos::Release =
+                octocrab::instance().get(url, None::<&()>).await?;
+            NotificationTarget::Release(release.into())
+        }
+        ("Discussion", _) => {
+            let query_vars = graphql::discussion_search_query::Variables {
+                search: format!(
+                    "repo:{}/{} {}",
+                    notif
+                        .repository
+                        .owner
+                        .as_ref()
+                        .map(|u| u.login.clone())
+                        .unwrap_or_default(),
+                    notif.repository.name,
+                    notif.subject.title
+                ),
+            };
+            let data =
+                graphql::query::<graphql::DiscussionSearchQuery>(query_vars, &octocrab::instance())
+                    .await?;
+            let convert_to_meta = || -> Option<DiscussionMeta> {
+                use graphql::discussion_search_query::DiscussionSearchQuerySearchEdgesNode as ResultType;
+
+                data?
+                    .search
+                    .edges?
+                    .into_iter()
+                    .next()??
+                    .node
+                    .and_then(|res| match res {
+                        ResultType::Discussion(d) => Some(DiscussionMeta {
+                            repo: RepoMeta::from(&notif.repository),
+                            title: notif.subject.title.clone(),
+                            state: match d.answer_chosen_at {
+                                Some(_) => DiscussionState::Answered,
+                                None => DiscussionState::Unanswered,
+                            },
+                            number: d.number as usize,
+                        }),
+                        _ => None,
+                    })
+            };
+
+            convert_to_meta()
+                .map(NotificationTarget::Discussion)
+                .unwrap_or(NotificationTarget::Unknown)
+        }
+        ("CheckSuite", _) => NotificationTarget::CiBuild,
+        (_, _) => NotificationTarget::Unknown,
+    };
+
+    Ok(Notification {
+        inner: notif,
+        target,
+    })
 }
 
 /// Helper struct used to send the parameters for a issues timeline api call.
