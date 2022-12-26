@@ -34,3 +34,19 @@ pub struct IssueTimelineQuery;
     response_derives = "Debug"
 )]
 pub struct PullRequestTimelineQuery;
+
+#[derive(graphql_client::GraphQLQuery)]
+#[graphql(
+    schema_path = "schema.graphql",
+    query_path = "src/queries/discussion.graphql",
+    response_derives = "Debug"
+)]
+pub struct DiscussionQuery;
+
+#[derive(graphql_client::GraphQLQuery)]
+#[graphql(
+    schema_path = "schema.graphql",
+    query_path = "src/queries/discussion_search.graphql",
+    response_derives = "Debug"
+)]
+pub struct DiscussionSearchQuery;

@@ -1,0 +1,14 @@
+query DiscussionSearchQuery($search: String!) {
+  search(query: $search, type: DISCUSSION, first: 1) {
+    edges {
+      node {
+        __typename
+        ... on Discussion {
+          number
+          answerChosenAt
+        }
+      }
+    }
+  }
+}
+

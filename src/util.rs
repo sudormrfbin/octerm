@@ -1,6 +1,8 @@
 use meow::style::Color;
 
-use crate::github::{IssueState, NotificationTarget, PullRequestState, IssueClosedReason};
+use crate::github::{
+    DiscussionState, IssueClosedReason, IssueState, NotificationTarget, PullRequestState,
+};
 
 pub fn notif_target_color(target: &NotificationTarget) -> Color {
     match target {
@@ -16,7 +18,10 @@ pub fn notif_target_color(target: &NotificationTarget) -> Color {
         },
         NotificationTarget::CiBuild => Color::Red,
         NotificationTarget::Release(_) => Color::Blue,
-        NotificationTarget::Discussion => Color::Yellow,
+        NotificationTarget::Discussion(ref discussion) => match discussion.state {
+            DiscussionState::Unanswered => Color::Yellow,
+            DiscussionState::Answered => Color::Green,
+        },
         NotificationTarget::Unknown => Color::White,
     }
 }

@@ -4,7 +4,7 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::Result;
+use crate::{error::Result, network::graphql};
 
 use self::events::{DateTimeUtc, Event};
 
@@ -33,6 +33,10 @@ impl Notification {
                 state: PullRequestState::Merged,
                 ..
             }) => 90,
+            NotificationTarget::Discussion(DiscussionMeta {
+                state: DiscussionState::Answered,
+                ..
+            }) => 85,
             NotificationTarget::PullRequest(PullRequestMeta {
                 state: PullRequestState::Closed,
                 ..
@@ -45,7 +49,10 @@ impl Notification {
                 state: IssueState::Closed(IssueClosedReason::Completed),
                 ..
             }) => 65,
-            NotificationTarget::Discussion => 60,
+            NotificationTarget::Discussion(DiscussionMeta {
+                state: DiscussionState::Unanswered,
+                ..
+            }) => 60,
             NotificationTarget::Issue(IssueMeta {
                 state: IssueState::Open,
                 ..
@@ -64,27 +71,12 @@ impl Notification {
     /// Fetch additional information about the notification from the octocrab
     /// Notification model and construct a [`Notification`].
     pub async fn from_octocrab(notif: octocrab::models::activity::Notification) -> Result<Self> {
-        let url = match notif.subject.url.as_ref() {
-            Some(url) => url,
-            None => {
-                return Ok(Notification {
-                    target: match notif.subject.r#type.as_str() {
-                        "Discussion" => NotificationTarget::Discussion,
-                        "CheckSuite" => NotificationTarget::CiBuild,
-                        // Issues and PRs usually have a subject url,
-                        // so this is somewhat an edge case.
-                        _ => NotificationTarget::Unknown,
-                    },
-                    inner: notif,
-                });
-            }
-        };
-        let target = match notif.subject.r#type.as_str() {
-            "Issue" => {
+        let target = match (notif.subject.r#type.as_str(), notif.subject.url.as_ref()) {
+            ("Issue", Some(url)) => {
                 let issue: IssueDeserModel = octocrab::instance().get(url, None::<&()>).await?;
                 NotificationTarget::Issue(IssueMeta::new(issue, RepoMeta::from(&notif.repository)))
             }
-            "PullRequest" => {
+            ("PullRequest", Some(url)) => {
                 let pr: octocrab::models::pulls::PullRequest =
                     octocrab::instance().get(url, None::<&()>).await?;
                 NotificationTarget::PullRequest(PullRequestMeta::new(
@@ -92,15 +84,61 @@ impl Notification {
                     RepoMeta::from(&notif.repository),
                 ))
             }
-            "Release" => {
+            ("Release", Some(url)) => {
                 let release: octocrab::models::repos::Release =
                     octocrab::instance().get(url, None::<&()>).await?;
                 NotificationTarget::Release(release.into())
             }
-            "Discussion" => NotificationTarget::Discussion,
-            "CheckSuite" => NotificationTarget::CiBuild,
-            _ => NotificationTarget::Unknown,
+            ("Discussion", _) => {
+                let query_vars = graphql::discussion_search_query::Variables {
+                    search: format!(
+                        "repo:{}/{} {}",
+                        notif
+                            .repository
+                            .owner
+                            .as_ref()
+                            .map(|u| u.login.clone())
+                            .unwrap_or_default(),
+                        notif.repository.name,
+                        notif.subject.title
+                    ),
+                };
+                let data = graphql::query::<graphql::DiscussionSearchQuery>(
+                    query_vars,
+                    &octocrab::instance(),
+                )
+                .await?;
+                let convert_to_meta = || -> Option<DiscussionMeta> {
+                    use graphql::discussion_search_query::DiscussionSearchQuerySearchEdgesNode as ResultType;
+
+                    data?
+                        .search
+                        .edges?
+                        .into_iter()
+                        .next()??
+                        .node
+                        .and_then(|res| match res {
+                            ResultType::Discussion(d) => Some(DiscussionMeta {
+                                repo: RepoMeta::from(&notif.repository),
+                                title: notif.subject.title.clone(),
+                                state: match d.answer_chosen_at {
+                                    Some(_) => DiscussionState::Answered,
+                                    None => DiscussionState::Unanswered,
+                                },
+                                number: d.number as usize,
+                            }),
+                            _ => None,
+                        })
+                };
+
+                convert_to_meta()
+                    .map(NotificationTarget::Discussion)
+                    .unwrap_or(NotificationTarget::Unknown)
+            }
+            ("CheckSuite", _) => NotificationTarget::CiBuild,
+            (_, _) => NotificationTarget::Unknown,
         };
+
         Ok(Notification {
             inner: notif,
             target,
@@ -113,7 +151,7 @@ pub enum NotificationTarget {
     Issue(IssueMeta),
     PullRequest(PullRequestMeta),
     Release(ReleaseMeta),
-    Discussion,
+    Discussion(DiscussionMeta),
     CiBuild,
     Unknown,
 }
@@ -124,7 +162,7 @@ impl NotificationTarget {
             NotificationTarget::Issue(ref i) => i.icon(),
             NotificationTarget::PullRequest(ref p) => p.icon(),
             NotificationTarget::Release(ref r) => r.icon(),
-            NotificationTarget::Discussion => "",
+            NotificationTarget::Discussion(_) => "",
             NotificationTarget::CiBuild => "",
             NotificationTarget::Unknown => "",
         }
@@ -339,6 +377,20 @@ impl From<octocrab::models::repos::Release> for ReleaseMeta {
             tag_name: release.tag_name,
         }
     }
+}
+
+#[derive(Clone)]
+pub struct DiscussionMeta {
+    pub repo: RepoMeta,
+    pub title: String,
+    pub number: usize,
+    pub state: DiscussionState,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum DiscussionState {
+    Answered,
+    Unanswered,
 }
 
 #[derive(Default, Clone, Serialize, Deserialize)]
