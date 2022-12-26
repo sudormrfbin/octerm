@@ -83,7 +83,7 @@ impl NotificationTarget {
             NotificationTarget::Issue(ref i) => i.icon(),
             NotificationTarget::PullRequest(ref p) => p.icon(),
             NotificationTarget::Release(ref r) => r.icon(),
-            NotificationTarget::Discussion(_) => "",
+            NotificationTarget::Discussion(ref d) => d.icon(),
             NotificationTarget::CiBuild => "",
             NotificationTarget::Unknown => "",
         }
@@ -319,10 +319,40 @@ pub struct DiscussionMeta {
     pub state: DiscussionState,
 }
 
+impl DiscussionMeta {
+    pub fn icon(&self) -> &'static str {
+        ""
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum DiscussionState {
     Answered,
     Unanswered,
+}
+
+pub struct Discussion {
+    pub meta: DiscussionMeta,
+    pub author: User,
+    pub upvotes: usize,
+    pub body: String,
+    pub created_at: DateTimeUtc,
+    pub suggested_answers: Vec<DiscussionSuggestedAnswer>,
+}
+
+pub struct DiscussionSuggestedAnswer {
+    pub author: User,
+    pub is_answer: bool,
+    pub upvotes: usize,
+    pub body: String,
+    pub created_at: DateTimeUtc,
+    pub replies: Vec<DiscussionReplyToSuggestedAnswer>,
+}
+
+pub struct DiscussionReplyToSuggestedAnswer {
+    pub author: User,
+    pub body: String,
+    pub created_at: DateTimeUtc,
 }
 
 #[derive(Default, Clone, Serialize, Deserialize)]

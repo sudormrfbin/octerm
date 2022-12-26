@@ -7,9 +7,9 @@ pub mod util;
 
 use components::{
     release::ReleaseViewMsg, IssueViewMsg, NotificationsView, NotificationsViewMsg,
-    PullRequestViewMsg,
+    PullRequestViewMsg, DiscussionViewMsg,
 };
-use github::{Issue, IssueMeta, NotificationTarget, PullRequest, PullRequestMeta};
+use github::{Issue, IssueMeta, NotificationTarget, PullRequest, PullRequestMeta, Discussion, DiscussionMeta};
 use meow::{
     components::{container::Container, empty::Empty, line::Line, Component, Layout, ListMsg},
     key,
@@ -28,6 +28,7 @@ pub enum Msg {
     IssueViewMsg(IssueViewMsg),
     PullRequestViewMsg(PullRequestViewMsg),
     ReleaseViewMsg(ReleaseViewMsg),
+    DiscussionViewMsg(DiscussionViewMsg),
 }
 
 impl FromResponse<ServerResponse> for Msg {
@@ -40,6 +41,7 @@ pub enum Route {
     Issue(components::IssueView),
     PullRequest(components::PullRequestView),
     Release(components::ReleaseView),
+    Discussion(components::DiscussionView),
 }
 
 pub enum ServerRequest {
@@ -48,6 +50,7 @@ pub enum ServerRequest {
     MarkNotifAsRead(Notification),
     OpenIssue(IssueMeta),
     OpenPullRequest(PullRequestMeta),
+    OpenDiscussion(DiscussionMeta),
 }
 
 pub enum ServerResponse {
@@ -55,6 +58,7 @@ pub enum ServerResponse {
     MarkedNotifAsRead(Notification),
     Issue(Issue),
     PullRequest(PullRequest),
+    Discussion(Discussion),
     AsyncTaskStart,
     AsyncTaskDone,
     Error(Error),
@@ -81,6 +85,9 @@ impl Model {
                 github::NotificationTarget::Release(ref release) => {
                     model.route = Some(Route::Release(release.clone().into()));
                     Cmd::None
+                }
+                github::NotificationTarget::Discussion(ref meta) => {
+                    ServerRequest::OpenDiscussion(meta.clone()).into()
                 }
                 _ => Cmd::None,
             }
@@ -153,6 +160,19 @@ impl Model {
         Cmd::None
     }
 
+    fn update_discussion_view_msg(&mut self, msg: DiscussionViewMsg) -> Cmd<ServerRequest> {
+        match msg {
+            DiscussionViewMsg::CloseView => self.route = None,
+            _ => {
+                if let Some(Route::Discussion(ref mut disc)) = self.route {
+                    return disc.update(msg);
+                }
+            }
+        }
+
+        Cmd::None
+    }
+
     fn update_in_response(&mut self, resp: ServerResponse) -> Cmd<ServerRequest> {
         match resp {
             ServerResponse::Notifications(mut notifs) => {
@@ -186,6 +206,9 @@ impl Model {
             }
             ServerResponse::PullRequest(pr) => {
                 self.route = Some(Route::PullRequest(pr.into()));
+            }
+            ServerResponse::Discussion(disc) => {
+                self.route = Some(Route::Discussion(disc.into()));
             }
         }
         Cmd::None
@@ -235,6 +258,22 @@ impl Model {
                             .bg(util::notif_target_color(target))
                             .fg(Color::Black);
                     statusline.push(header).push(" ").push(&pr.title);
+                }
+            }
+            Some(Route::Discussion(_)) => {
+                if let Notification {
+                    target: target @ NotificationTarget::Discussion(disc),
+                    ..
+                } = self.notifs.selected()
+                {
+                    let header = format!(
+                        " {icon} #{number} ",
+                        icon = disc.icon(),
+                        number = disc.number
+                    )
+                    .bg(util::notif_target_color(target))
+                    .fg(Color::Black);
+                    statusline.push(header).push(" ").push(&disc.title);
                 }
             }
             Some(Route::Release(_)) => {
@@ -291,6 +330,9 @@ impl App for OctermApp {
                 Some(Route::PullRequest(ref pr)) => {
                     pr.event_to_msg(event).map(Msg::PullRequestViewMsg)
                 }
+                Some(Route::Discussion(ref disc)) => {
+                    disc.event_to_msg(event).map(Msg::DiscussionViewMsg)
+                }
                 None => None,
             }
             .or_else(|| {
@@ -313,6 +355,7 @@ impl App for OctermApp {
             Msg::IssueViewMsg(msg) => model.update_issue_view_msg(msg),
             Msg::ReleaseViewMsg(msg) => model.update_release_view_msg(msg),
             Msg::PullRequestViewMsg(msg) => model.update_pr_view_msg(msg),
+            Msg::DiscussionViewMsg(msg) => model.update_discussion_view_msg(msg),
             Msg::ServerResponse(resp) => model.update_in_response(resp),
         }
     }
@@ -327,6 +370,7 @@ impl App for OctermApp {
             Some(Route::Issue(ref issue)) => notif_view.push(issue),
             Some(Route::Release(ref release)) => notif_view.push(release),
             Some(Route::PullRequest(ref pr)) => notif_view.push(pr),
+            Some(Route::Discussion(ref disc)) => notif_view.push(disc),
             None => notif_view.push(Empty),
         }
         .constrain(Constraint::medium().eq().ratio(1, 2));

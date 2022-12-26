@@ -1,0 +1,39 @@
+query DiscussionQuery($owner: String!, $repo: String!, $number: Int!) {
+  repository(name: $repo, owner: $owner) {
+    discussion(number: $number) {
+      author {
+        __typename
+        login
+      }
+      number
+      title
+      body
+      createdAt
+      answerChosenAt
+      upvoteCount
+      comments(first: 100) {
+        nodes {
+          author {
+            __typename
+            login
+          }
+          isAnswer
+          authorAssociation
+          upvoteCount
+          body
+          createdAt
+          replies(first: 100) {
+            nodes {
+              author {
+                __typename
+                login
+              }
+              body
+              createdAt
+            }
+          }
+        }
+      }
+    }
+  }
+}

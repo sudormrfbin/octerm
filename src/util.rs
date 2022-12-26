@@ -20,7 +20,7 @@ pub fn notif_target_color(target: &NotificationTarget) -> Color {
         NotificationTarget::Release(_) => Color::Blue,
         NotificationTarget::Discussion(ref discussion) => match discussion.state {
             DiscussionState::Unanswered => Color::Yellow,
-            DiscussionState::Answered => Color::Green,
+            DiscussionState::Answered => Color::Purple,
         },
         NotificationTarget::Unknown => Color::White,
     }

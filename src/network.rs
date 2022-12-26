@@ -11,8 +11,9 @@ use tokio::task::JoinHandle;
 use crate::error::{Error, Result};
 use crate::github::events::Event;
 use crate::github::{
-    self, events, DiscussionMeta, DiscussionState, Issue, IssueDeserModel, IssueMeta, Notification,
-    NotificationTarget, PullRequest, PullRequestMeta, RepoMeta,
+    self, events, Discussion, DiscussionMeta, DiscussionReplyToSuggestedAnswer, DiscussionState,
+    DiscussionSuggestedAnswer, Issue, IssueDeserModel, IssueMeta, Notification, NotificationTarget,
+    PullRequest, PullRequestMeta, RepoMeta,
 };
 use crate::{ServerRequest, ServerResponse};
 
@@ -30,6 +31,7 @@ pub async fn start_server(channel: Channel) {
             ServerRequest::MarkNotifAsRead(n) => mark_as_read(send, n).await,
             ServerRequest::OpenIssue(issue) => open_issue(issue, send).await,
             ServerRequest::OpenPullRequest(pr) => open_pr(pr, send).await,
+            ServerRequest::OpenDiscussion(disc) => open_discussion(disc, send).await,
         };
         send(ServerResponse::AsyncTaskDone);
 
@@ -71,7 +73,8 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
     };
 
     let data =
-        graphql::query::<graphql::PullRequestTimelineQuery>(query_vars, &octocrab::instance()).await?;
+        graphql::query::<graphql::PullRequestTimelineQuery>(query_vars, &octocrab::instance())
+            .await?;
 
     let convert_to_events = move || -> Option<Vec<github::events::Event>> {
         use github::events::EventKind;
@@ -539,6 +542,64 @@ async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<(
     let events = convert_to_events().unwrap_or_default();
     send(ServerResponse::Issue(Issue::new(issue, events)));
 
+    Ok(())
+}
+
+async fn open_discussion(meta: DiscussionMeta, send: impl Fn(ServerResponse)) -> Result<()> {
+    let query_vars = graphql::discussion_query::Variables {
+        owner: meta.repo.owner.clone(),
+        repo: meta.repo.name.clone(),
+        number: meta.number as i64,
+    };
+
+    let data =
+        graphql::query::<graphql::DiscussionQuery>(query_vars, &octocrab::instance()).await?;
+
+    let convert_to_discussion = move || -> Option<Discussion> {
+        let disc = data?.repository?.discussion?;
+        let answers = disc
+            .comments
+            .nodes?
+            .into_iter()
+            .filter_map(|ans| {
+                let ans = ans?;
+                Some(DiscussionSuggestedAnswer {
+                    author: actor!(ans, author),
+                    is_answer: ans.is_answer,
+                    upvotes: ans.upvote_count as usize,
+                    body: ans.body,
+                    created_at: ans.created_at,
+                    replies: ans
+                        .replies
+                        .nodes
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|reply| {
+                            let reply = reply?;
+                            Some(DiscussionReplyToSuggestedAnswer {
+                                author: actor!(reply, author),
+                                body: reply.body,
+                                created_at: reply.created_at,
+                            })
+                        })
+                        .collect(),
+                })
+            })
+            .collect();
+
+        Some(Discussion {
+            meta,
+            author: actor!(disc, author),
+            upvotes: disc.upvote_count as usize,
+            body: disc.body,
+            created_at: disc.created_at,
+            suggested_answers: answers,
+        })
+    };
+
+    if let Some(disc) = convert_to_discussion() {
+        send(ServerResponse::Discussion(disc))
+    }
     Ok(())
 }
 
