@@ -3,7 +3,6 @@ pub mod graphql;
 use std::ops::Not;
 use std::result::Result as StdResult;
 
-use graphql_client::GraphQLQuery;
 use meow::server::ServerChannel;
 
 use octocrab::{models::activity::Notification as OctoNotification, Page};
@@ -68,11 +67,8 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
         number: pr.number as i64,
     };
 
-    let query = graphql::PullRequestTimelineQuery::build_query(query_vars);
-    let response = octocrab::instance().post("graphql", Some(&query)).await?;
-    let data = graphql::response_to_result::<
-        <graphql::PullRequestTimelineQuery as GraphQLQuery>::ResponseData,
-    >(response)?;
+    let data =
+        graphql::query::<graphql::PullRequestTimelineQuery>(query_vars, &octocrab::instance()).await?;
 
     let convert_to_events = move || -> Option<Vec<github::events::Event>> {
         use github::events::EventKind;
@@ -360,11 +356,8 @@ async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<(
         number: issue.number as i64,
     };
 
-    let query = graphql::IssueTimelineQuery::build_query(query_vars);
-    let response = octocrab::instance().post("graphql", Some(&query)).await?;
-    let data = graphql::response_to_result::<
-        <graphql::IssueTimelineQuery as GraphQLQuery>::ResponseData,
-    >(response)?;
+    let data =
+        graphql::query::<graphql::IssueTimelineQuery>(query_vars, &octocrab::instance()).await?;
 
     let convert_to_events = move || -> Option<Vec<github::events::Event>> {
         use github::events::EventKind;

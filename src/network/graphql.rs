@@ -1,5 +1,14 @@
 use crate::error::{Error, Result};
-use graphql_client::Response;
+use graphql_client::{GraphQLQuery, Response};
+
+pub async fn query<Q: GraphQLQuery>(
+    vars: Q::Variables,
+    octo: &octocrab::Octocrab,
+) -> Result<Option<Q::ResponseData>> {
+    let query = Q::build_query(vars);
+    let response = octo.post("graphql", Some(&query)).await?;
+    response_to_result::<Q::ResponseData>(response)
+}
 
 pub fn response_to_result<Data>(resp: Response<Data>) -> Result<Option<Data>> {
     if let Some(err) = resp.errors {
