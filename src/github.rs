@@ -268,6 +268,17 @@ impl Display for PullRequestState {
     }
 }
 
+pub struct PullRequest {
+    pub meta: PullRequestMeta,
+    pub events: Vec<Event>,
+}
+
+impl PullRequest {
+    pub fn new(meta: PullRequestMeta, events: Vec<Event>) -> Self {
+        Self { meta, events }
+    }
+}
+
 #[derive(Clone)]
 pub struct ReleaseMeta {
     pub title: String,
@@ -343,16 +354,5 @@ impl From<octocrab::models::User> for User {
 impl From<String> for User {
     fn from(name: String) -> Self {
         Self { name }
-    }
-}
-
-pub struct PullRequest {
-    pub meta: PullRequestMeta,
-    pub events: Vec<Event>,
-}
-
-impl PullRequest {
-    pub fn new(meta: PullRequestMeta, events: Vec<Event>) -> Self {
-        Self { meta, events }
     }
 }
