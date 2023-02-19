@@ -557,16 +557,14 @@ async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<(
     Ok(())
 }
 
-async fn open_discussion(meta: DiscussionMeta, send: impl Fn(ServerResponse)) -> Result<()> {
+async fn discussion(meta: DiscussionMeta) -> Result<Option<Discussion>> {
     let query_vars = graphql::discussion_query::Variables {
         owner: meta.repo.owner.clone(),
         repo: meta.repo.name.clone(),
         number: meta.number as i64,
     };
-
     let data =
         graphql::query::<graphql::DiscussionQuery>(query_vars, &octocrab::instance()).await?;
-
     let convert_to_discussion = move || -> Option<Discussion> {
         let disc = data?.repository?.discussion?;
         let answers = disc
@@ -608,8 +606,11 @@ async fn open_discussion(meta: DiscussionMeta, send: impl Fn(ServerResponse)) ->
             suggested_answers: answers,
         })
     };
+    Ok(convert_to_discussion())
+}
 
-    if let Some(disc) = convert_to_discussion() {
+async fn open_discussion(meta: DiscussionMeta, send: impl Fn(ServerResponse)) -> Result<()> {
+    if let Some(disc) = discussion(meta).await? {
         send(ServerResponse::Discussion(disc))
     }
     Ok(())
