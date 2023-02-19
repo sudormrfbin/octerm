@@ -361,11 +361,11 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
     Ok(())
 }
 
-async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<()> {
+async fn issue_timeline(owner: &str, repo: &str, number: usize) -> Result<Option<Vec<Event>>> {
     let query_vars = graphql::issue_timeline_query::Variables {
-        owner: issue.repo.owner.clone(),
-        repo: issue.repo.name.clone(),
-        number: issue.number as i64,
+        owner: owner.to_owned(),
+        repo: repo.to_owned(),
+        number: number as i64,
     };
 
     let data =
@@ -545,7 +545,13 @@ async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<(
         Some(events)
     };
 
-    let events = convert_to_events().unwrap_or_default();
+    Ok(convert_to_events())
+}
+
+async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<()> {
+    let events = issue_timeline(&issue.repo.owner, &issue.repo.name, issue.number)
+        .await?
+        .unwrap_or_default();
     send(ServerResponse::Issue(Issue::new(issue, events)));
 
     Ok(())
