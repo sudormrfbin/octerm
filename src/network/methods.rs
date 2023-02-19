@@ -1,11 +1,18 @@
 use std::ops::Not;
+use std::sync::Arc;
+
+use std::result::Result as StdResult;
 
 use octocrab::Octocrab;
+use octocrab::{models::activity::Notification as OctoNotification, Page};
+use tokio::task::JoinHandle;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::github::{self, events::Event};
 use crate::github::{
-    events, Discussion, DiscussionMeta, DiscussionReplyToSuggestedAnswer, DiscussionSuggestedAnswer,
+    events, Discussion, DiscussionMeta, DiscussionReplyToSuggestedAnswer, DiscussionState,
+    DiscussionSuggestedAnswer, IssueDeserModel, IssueMeta, Notification, NotificationTarget,
+    PullRequestMeta, RepoMeta,
 };
 
 use super::graphql;
@@ -564,4 +571,138 @@ pub async fn discussion(octo: &Octocrab, meta: DiscussionMeta) -> Result<Option<
         })
     };
     Ok(convert_to_discussion())
+}
+
+async fn get_all_notifs(octo: Arc<Octocrab>) -> Result<Vec<OctoNotification>> {
+    let mut notifs = octo.activity().notifications().list().send().await?;
+    let n_pages = match notifs.number_of_pages() {
+        None | Some(0) | Some(1) => return Ok(notifs.take_items()),
+        Some(p) => p,
+    };
+
+    // TODO: Use Vec::with_capacity more
+    // Spawn Notification::from_octocrab(n) inside each page task (halves waiting time)
+    let mut tasks: Vec<JoinHandle<Result<Page<OctoNotification>>>> =
+        Vec::with_capacity(n_pages as usize - 1);
+    for i in 2..=n_pages {
+        let octo = Arc::clone(&octo);
+        tasks.push(tokio::spawn(async move {
+            Ok(octo
+                .activity()
+                .notifications()
+                .list()
+                .page(i as u8)
+                .send()
+                .await?)
+        }));
+    }
+
+    let result: Vec<StdResult<Result<Page<OctoNotification>>, tokio::task::JoinError>> =
+        futures::future::join_all(tasks).await;
+
+    let mut acc = notifs.take_items();
+    acc.reserve_exact(50 * result.len()); // Max notifications from each request is 50
+
+    let result = result.into_iter().try_fold(acc, |mut acc, task| {
+        let notif = task.map_err(|_| Error::NetworkTask)?;
+        acc.extend_from_slice(&notif?.take_items());
+        Ok::<Vec<OctoNotification>, Error>(acc)
+    })?;
+    Ok(result)
+}
+
+pub async fn notifications(octo: Arc<Octocrab>) -> Result<Vec<Notification>> {
+    let notifs = get_all_notifs(Arc::clone(&octo)).await?;
+    let tasks: Vec<JoinHandle<Result<Notification>>> = notifs
+        .into_iter()
+        .map(|n| tokio::spawn(octo_notif_to_notif(Arc::clone(&octo), n)))
+        .collect();
+
+    // TODO: Buffer the requests
+    let result: Vec<StdResult<Result<Notification>, tokio::task::JoinError>> =
+        futures::future::join_all(tasks).await;
+    let vec = Vec::with_capacity(result.len());
+    let mut result = result.into_iter().try_fold(vec, |mut acc, task| {
+        let notif = task.map_err(|_| Error::NetworkTask)?;
+        acc.push(notif?);
+        Ok::<Vec<Notification>, Error>(acc)
+    })?;
+    result.sort_unstable_by_key(Notification::sorter);
+    result.reverse();
+
+    Ok(result)
+}
+
+/// Fetch additional information about the notification from the octocrab
+/// Notification model and construct a [`Notification`].
+pub async fn octo_notif_to_notif(
+    octo: Arc<Octocrab>,
+    notif: octocrab::models::activity::Notification,
+) -> Result<Notification> {
+    let target = match (notif.subject.r#type.as_str(), notif.subject.url.as_ref()) {
+        ("Issue", Some(url)) => {
+            let issue: IssueDeserModel = octo.get(url, None::<&()>).await?;
+            NotificationTarget::Issue(IssueMeta::new(issue, RepoMeta::from(&notif.repository)))
+        }
+        ("PullRequest", Some(url)) => {
+            let pr: octocrab::models::pulls::PullRequest = octo.get(url, None::<&()>).await?;
+            NotificationTarget::PullRequest(PullRequestMeta::new(
+                pr,
+                RepoMeta::from(&notif.repository),
+            ))
+        }
+        ("Release", Some(url)) => {
+            let release: octocrab::models::repos::Release = octo.get(url, None::<&()>).await?;
+            NotificationTarget::Release(release.into())
+        }
+        ("Discussion", _) => {
+            let query_vars = graphql::discussion_search_query::Variables {
+                search: format!(
+                    "repo:{}/{} {}",
+                    notif
+                        .repository
+                        .owner
+                        .as_ref()
+                        .map(|u| u.login.clone())
+                        .unwrap_or_default(),
+                    notif.repository.name,
+                    notif.subject.title
+                ),
+            };
+            let data = graphql::query::<graphql::DiscussionSearchQuery>(query_vars, &octo).await?;
+            let convert_to_meta = || -> Option<DiscussionMeta> {
+                use graphql::discussion_search_query::DiscussionSearchQuerySearchEdgesNode as ResultType;
+
+                data?
+                    .search
+                    .edges?
+                    .into_iter()
+                    .next()??
+                    .node
+                    .and_then(|res| match res {
+                        ResultType::Discussion(d) => Some(DiscussionMeta {
+                            repo: RepoMeta::from(&notif.repository),
+                            title: notif.subject.title.clone(),
+                            state: match d.answer_chosen_at {
+                                Some(_) => DiscussionState::Answered,
+                                None => DiscussionState::Unanswered,
+                            },
+                            number: d.number as usize,
+                        }),
+                        _ => None,
+                    })
+            };
+
+            convert_to_meta()
+                .map(NotificationTarget::Discussion)
+                .unwrap_or(NotificationTarget::Unknown)
+        }
+        ("CheckSuite", _) => NotificationTarget::CiBuild,
+        (_, _) => NotificationTarget::Unknown,
+    };
+
+    Ok(Notification {
+        inner: notif,
+        target,
+    })
 }
