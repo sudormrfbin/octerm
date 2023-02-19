@@ -2,7 +2,6 @@ use std::{error::Error, path::PathBuf};
 
 use meow::{
     components::{
-        line::Line,
         scroll::{Scroll, ScrollMsg},
         Component,
     },
