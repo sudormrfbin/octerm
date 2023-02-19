@@ -4,7 +4,7 @@ use crate::error::{Error, Result};
 use crate::github::{DiscussionMeta, Issue, IssueMeta, Notification, PullRequest, PullRequestMeta};
 use crate::app::{ServerRequest, ServerResponse};
 
-use super::methods::{discussion, issue_timeline, notifications, pr_timeline};
+use super::methods::{discussion, issue_timeline, notifications, pr_timeline, mark_notification_as_read};
 
 type Channel = ServerChannel<ServerRequest, ServerResponse>;
 
@@ -72,63 +72,9 @@ pub async fn refresh(send: impl Fn(ServerResponse)) -> Result<()> {
     Ok(())
 }
 
-pub async fn open_in_browser(notif: Notification) -> Result<()> {
-    let default_url = notif
-        .inner
-        .subject
-        .url
-        .as_ref()
-        .ok_or(Error::HtmlUrlNotFound {
-            api_url: notif.inner.url.to_string(),
-        });
-    let url = match notif.inner.subject.r#type.as_str() {
-        "Release" => {
-            let release: octocrab::models::repos::Release =
-                octocrab::instance().get(default_url?, None::<&()>).await?;
-            release.html_url.to_string()
-        }
-        "Issue" => match notif.inner.subject.latest_comment_url {
-            Some(ref url) => {
-                let comment: octocrab::models::issues::Comment =
-                    octocrab::instance().get(url, None::<&()>).await?;
-                comment.html_url.to_string()
-            }
-            None => {
-                // TODO: Return last (newest) comment in thread
-                let issue: octocrab::models::issues::Issue =
-                    octocrab::instance().get(default_url?, None::<&()>).await?;
-                issue.html_url.to_string()
-            }
-        },
-        "PullRequest" => {
-            // BUG: In case of PRs, the url is simple, without the latest comment,
-            // changed files, etc. Therefore the behavior is different from clicking
-            // a PR notification in the web ui, which would show the latest change.
-            let pr: octocrab::models::pulls::PullRequest =
-                octocrab::instance().get(default_url?, None::<&()>).await?;
-            pr.html_url
-                .ok_or(Error::HtmlUrlNotFound {
-                    api_url: notif.inner.url.to_string(),
-                })?
-                .to_string()
-        }
-        _ => {
-            return Err(Error::HtmlUrlNotFound {
-                api_url: notif.inner.url.to_string(),
-            })
-        }
-    };
-    open::that(url.as_str()).map_err(|_| Error::BrowserNotAvailable)?;
-
-    Ok(())
-}
-
 pub async fn mark_as_read(send: impl Fn(ServerResponse), notif: Notification) -> Result<()> {
-    octocrab::instance()
-        .activity()
-        .notifications()
-        .mark_as_read(notif.inner.id)
-        .await?;
+    mark_notification_as_read(&octocrab::instance(), notif.inner.id).await?;
+    
     send(ServerResponse::MarkedNotifAsRead(notif));
 
     Ok(())

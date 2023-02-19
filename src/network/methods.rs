@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use std::result::Result as StdResult;
 
+use octocrab::models::NotificationId;
 use octocrab::Octocrab;
 use octocrab::{models::activity::Notification as OctoNotification, Page};
 use tokio::task::JoinHandle;
@@ -633,6 +634,65 @@ pub async fn notifications(octo: Arc<Octocrab>) -> Result<Vec<Notification>> {
     Ok(result)
 }
 
+pub async fn mark_notification_as_read(
+    octo: &Octocrab,
+    notification_id: NotificationId,
+) -> Result<()> {
+    Ok(octo
+        .activity()
+        .notifications()
+        .mark_as_read(notification_id)
+        .await?)
+}
+
+/// Retrieve the HTML url that can be opened in the browser to view the contents
+/// of a notification (the page that opens when a notification is clicked in the
+/// Web UI).
+pub async fn resolve_html_url(octo: &Octocrab, notification: &Notification) -> Result<String> {
+    let default_url = notification
+        .inner
+        .subject
+        .url
+        .as_ref()
+        .ok_or(Error::HtmlUrlNotFound {
+            api_url: notification.inner.url.to_string(),
+        });
+    match notification.inner.subject.r#type.as_str() {
+        "Release" => {
+            let release: octocrab::models::repos::Release =
+                octo.get(default_url?, None::<&()>).await?;
+            Ok(release.html_url.to_string())
+        }
+        "Issue" => match notification.inner.subject.latest_comment_url {
+            Some(ref url) => {
+                let comment: octocrab::models::issues::Comment = octo.get(url, None::<&()>).await?;
+                Ok(comment.html_url.to_string())
+            }
+            None => {
+                // TODO: Return last (newest) comment in thread
+                let issue: octocrab::models::issues::Issue =
+                    octo.get(default_url?, None::<&()>).await?;
+                Ok(issue.html_url.to_string())
+            }
+        },
+        "PullRequest" => {
+            // BUG: In case of PRs, the url is simple, without the latest comment,
+            // changed files, etc. Therefore the behavior is different from clicking
+            // a PR notification in the web ui, which would show the latest change.
+            let pr: octocrab::models::pulls::PullRequest =
+                octo.get(default_url?, None::<&()>).await?;
+            pr.html_url
+                .ok_or(Error::HtmlUrlNotFound {
+                    api_url: notification.inner.url.to_string(),
+                })
+                .map(|url| url.to_string())
+        }
+        _ => Err(Error::HtmlUrlNotFound {
+            api_url: notification.inner.url.to_string(),
+        }),
+    }
+}
+
 /// Fetch additional information about the notification from the octocrab
 /// Notification model and construct a [`Notification`].
 pub async fn octo_notif_to_notif(
@@ -705,4 +765,11 @@ pub async fn octo_notif_to_notif(
         inner: notif,
         target,
     })
+}
+
+pub async fn open_notification_in_browser(notif: &Notification) -> Result<()> {
+    let url = resolve_html_url(&octocrab::instance(), notif).await?;
+    crate::util::open_url_in_browser(url)?;
+
+    Ok(())
 }

@@ -1,5 +1,8 @@
-use crate::github::{
-    DiscussionState, IssueClosedReason, IssueState, NotificationTarget, PullRequestState,
+use crate::{
+    error::{Error, Result},
+    github::{
+        DiscussionState, IssueClosedReason, IssueState, NotificationTarget, PullRequestState,
+    },
 };
 
 pub enum NotifColor {
@@ -44,6 +47,10 @@ pub fn notif_target_color(target: &NotificationTarget) -> NotifColor {
         },
         NotificationTarget::Unknown => NotifColor::White,
     }
+}
+
+pub fn open_url_in_browser(url: String) -> Result<()> {
+    open::that(url.as_str()).map_err(|_| Error::BrowserNotAvailable)
 }
 
 /// Utility trait for writing value.boxed() instead of Box::new(value).
