@@ -2,9 +2,11 @@ pub mod graphql;
 pub mod methods;
 
 use std::result::Result as StdResult;
+use std::sync::Arc;
 
 use meow::server::ServerChannel;
 
+use octocrab::Octocrab;
 use octocrab::{models::activity::Notification as OctoNotification, Page};
 use tokio::task::JoinHandle;
 
@@ -76,25 +78,21 @@ async fn open_discussion(meta: DiscussionMeta, send: impl Fn(ServerResponse)) ->
     Ok(())
 }
 
-async fn get_all_notifs() -> Result<Vec<OctoNotification>> {
-    let mut notifs = octocrab::instance()
-        .activity()
-        .notifications()
-        .list()
-        .send()
-        .await?;
-    let pages = match notifs.number_of_pages().filter(|p| *p > 1) {
-        None => return Ok(notifs.take_items()),
+async fn get_all_notifs(octo: Arc<Octocrab>) -> Result<Vec<OctoNotification>> {
+    let mut notifs = octo.activity().notifications().list().send().await?;
+    let n_pages = match notifs.number_of_pages() {
+        None | Some(0) | Some(1) => return Ok(notifs.take_items()),
         Some(p) => p,
     };
 
     // TODO: Use Vec::with_capacity more
     // Spawn Notification::from_octocrab(n) inside each page task (halves waiting time)
     let mut tasks: Vec<JoinHandle<Result<Page<OctoNotification>>>> =
-        Vec::with_capacity(pages as usize - 1);
-    for i in 2..=pages {
+        Vec::with_capacity(n_pages as usize - 1);
+    for i in 2..=n_pages {
+        let octo = Arc::clone(&octo);
         tasks.push(tokio::spawn(async move {
-            Ok(octocrab::instance()
+            Ok(octo
                 .activity()
                 .notifications()
                 .list()
@@ -118,11 +116,11 @@ async fn get_all_notifs() -> Result<Vec<OctoNotification>> {
     Ok(result)
 }
 
-pub async fn refresh(send: impl Fn(ServerResponse)) -> Result<()> {
-    let notifs = get_all_notifs().await?;
+pub async fn notifications(octo: Arc<Octocrab>) -> Result<Vec<Notification>> {
+    let notifs = get_all_notifs(Arc::clone(&octo)).await?;
     let tasks: Vec<JoinHandle<Result<Notification>>> = notifs
         .into_iter()
-        .map(|n| tokio::spawn(octo_notif_to_notif(n)))
+        .map(|n| tokio::spawn(octo_notif_to_notif(Arc::clone(&octo), n)))
         .collect();
 
     // TODO: Buffer the requests
@@ -137,7 +135,13 @@ pub async fn refresh(send: impl Fn(ServerResponse)) -> Result<()> {
     result.sort_unstable_by_key(Notification::sorter);
     result.reverse();
 
-    send(ServerResponse::Notifications(result));
+    Ok(result)
+}
+
+pub async fn refresh(send: impl Fn(ServerResponse)) -> Result<()> {
+    send(ServerResponse::Notifications(
+        notifications(octocrab::instance()).await?,
+    ));
     Ok(())
 }
 
@@ -206,24 +210,23 @@ pub async fn mark_as_read(send: impl Fn(ServerResponse), notif: Notification) ->
 /// Fetch additional information about the notification from the octocrab
 /// Notification model and construct a [`Notification`].
 pub async fn octo_notif_to_notif(
+    octo: Arc<Octocrab>,
     notif: octocrab::models::activity::Notification,
 ) -> Result<Notification> {
     let target = match (notif.subject.r#type.as_str(), notif.subject.url.as_ref()) {
         ("Issue", Some(url)) => {
-            let issue: IssueDeserModel = octocrab::instance().get(url, None::<&()>).await?;
+            let issue: IssueDeserModel = octo.get(url, None::<&()>).await?;
             NotificationTarget::Issue(IssueMeta::new(issue, RepoMeta::from(&notif.repository)))
         }
         ("PullRequest", Some(url)) => {
-            let pr: octocrab::models::pulls::PullRequest =
-                octocrab::instance().get(url, None::<&()>).await?;
+            let pr: octocrab::models::pulls::PullRequest = octo.get(url, None::<&()>).await?;
             NotificationTarget::PullRequest(PullRequestMeta::new(
                 pr,
                 RepoMeta::from(&notif.repository),
             ))
         }
         ("Release", Some(url)) => {
-            let release: octocrab::models::repos::Release =
-                octocrab::instance().get(url, None::<&()>).await?;
+            let release: octocrab::models::repos::Release = octo.get(url, None::<&()>).await?;
             NotificationTarget::Release(release.into())
         }
         ("Discussion", _) => {
@@ -240,9 +243,7 @@ pub async fn octo_notif_to_notif(
                     notif.subject.title
                 ),
             };
-            let data =
-                graphql::query::<graphql::DiscussionSearchQuery>(query_vars, &octocrab::instance())
-                    .await?;
+            let data = graphql::query::<graphql::DiscussionSearchQuery>(query_vars, &octo).await?;
             let convert_to_meta = || -> Option<DiscussionMeta> {
                 use graphql::discussion_search_query::DiscussionSearchQuerySearchEdgesNode as ResultType;
 
