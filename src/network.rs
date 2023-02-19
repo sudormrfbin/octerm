@@ -5,6 +5,7 @@ use std::result::Result as StdResult;
 
 use meow::server::ServerChannel;
 
+use octocrab::Octocrab;
 use octocrab::{models::activity::Notification as OctoNotification, Page};
 use tokio::task::JoinHandle;
 
@@ -65,16 +66,19 @@ macro_rules! issue_or_pr {
     };
 }
 
-async fn pr_timeline(owner: &str, repo: &str, number: usize) -> Result<Option<Vec<Event>>> {
+async fn pr_timeline(
+    octo: &Octocrab,
+    owner: &str,
+    repo: &str,
+    number: usize,
+) -> Result<Option<Vec<Event>>> {
     let query_vars = graphql::pull_request_timeline_query::Variables {
         owner: owner.to_owned(),
         repo: repo.to_owned(),
         number: number as i64,
     };
 
-    let data =
-        graphql::query::<graphql::PullRequestTimelineQuery>(query_vars, &octocrab::instance())
-            .await?;
+    let data = graphql::query::<graphql::PullRequestTimelineQuery>(query_vars, octo).await?;
 
     let convert_to_events = move || -> Option<Vec<github::events::Event>> {
         use github::events::EventKind;
@@ -353,23 +357,32 @@ async fn pr_timeline(owner: &str, repo: &str, number: usize) -> Result<Option<Ve
 }
 
 async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<()> {
-    let events = pr_timeline(&pr.repo.owner, &pr.repo.name, pr.number)
-        .await?
-        .unwrap_or_default();
+    let events = pr_timeline(
+        &octocrab::instance(),
+        &pr.repo.owner,
+        &pr.repo.name,
+        pr.number,
+    )
+    .await?
+    .unwrap_or_default();
     send(ServerResponse::PullRequest(PullRequest::new(pr, events)));
 
     Ok(())
 }
 
-async fn issue_timeline(owner: &str, repo: &str, number: usize) -> Result<Option<Vec<Event>>> {
+async fn issue_timeline(
+    octo: &Octocrab,
+    owner: &str,
+    repo: &str,
+    number: usize,
+) -> Result<Option<Vec<Event>>> {
     let query_vars = graphql::issue_timeline_query::Variables {
         owner: owner.to_owned(),
         repo: repo.to_owned(),
         number: number as i64,
     };
 
-    let data =
-        graphql::query::<graphql::IssueTimelineQuery>(query_vars, &octocrab::instance()).await?;
+    let data = graphql::query::<graphql::IssueTimelineQuery>(query_vars, octo).await?;
 
     let convert_to_events = move || -> Option<Vec<github::events::Event>> {
         use github::events::EventKind;
@@ -549,22 +562,26 @@ async fn issue_timeline(owner: &str, repo: &str, number: usize) -> Result<Option
 }
 
 async fn open_issue(issue: IssueMeta, send: impl Fn(ServerResponse)) -> Result<()> {
-    let events = issue_timeline(&issue.repo.owner, &issue.repo.name, issue.number)
-        .await?
-        .unwrap_or_default();
+    let events = issue_timeline(
+        &octocrab::instance(),
+        &issue.repo.owner,
+        &issue.repo.name,
+        issue.number,
+    )
+    .await?
+    .unwrap_or_default();
     send(ServerResponse::Issue(Issue::new(issue, events)));
 
     Ok(())
 }
 
-async fn discussion(meta: DiscussionMeta) -> Result<Option<Discussion>> {
+async fn discussion(octo: &Octocrab, meta: DiscussionMeta) -> Result<Option<Discussion>> {
     let query_vars = graphql::discussion_query::Variables {
         owner: meta.repo.owner.clone(),
         repo: meta.repo.name.clone(),
         number: meta.number as i64,
     };
-    let data =
-        graphql::query::<graphql::DiscussionQuery>(query_vars, &octocrab::instance()).await?;
+    let data = graphql::query::<graphql::DiscussionQuery>(query_vars, octo).await?;
     let convert_to_discussion = move || -> Option<Discussion> {
         let disc = data?.repository?.discussion?;
         let answers = disc
@@ -610,7 +627,7 @@ async fn discussion(meta: DiscussionMeta) -> Result<Option<Discussion>> {
 }
 
 async fn open_discussion(meta: DiscussionMeta, send: impl Fn(ServerResponse)) -> Result<()> {
-    if let Some(disc) = discussion(meta).await? {
+    if let Some(disc) = discussion(&octocrab::instance(), meta).await? {
         send(ServerResponse::Discussion(disc))
     }
     Ok(())
