@@ -1,5 +1,7 @@
+#[cfg(feature = "tui")]
 use octerm::{error::Error, network::start_server, OctermApp, ServerRequest, ServerResponse};
 
+#[cfg(feature = "tui")]
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     let token = std::env::var("GITHUB_TOKEN").map_err(|_| Error::Authentication)?;
@@ -16,4 +18,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     app_channel.send_to_server(ServerRequest::RefreshNotifs)?;
     meow::run::<OctermApp>(Some(app_channel))?;
     Ok(())
+}
+
+#[cfg(not(feature = "tui"))]
+fn main() {
+    println!("Enable the tui feature to run this binary.")
 }

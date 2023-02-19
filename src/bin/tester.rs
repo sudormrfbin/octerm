@@ -1,66 +1,79 @@
-use meow::{components::Component, App, Cmd};
-use octerm::{
-    components::{IssueView, IssueViewMsg},
-    github::{self, events::DateTimeUtc, User},
-};
-
-enum Msg {
-    IssueViewMsg(IssueViewMsg),
-}
-
-struct Model {
-    issue: IssueView,
-}
-
-struct Tester {}
-
-impl App for Tester {
-    type Msg = Msg;
-
-    type Model = Model;
-
-    type Request = ();
-    type Response = ();
-
-    fn init() -> Self::Model {
-        Model {
-            issue: fake_issue().into(),
-        }
-    }
-
-    fn event_to_msg(event: meow::AppEvent, model: &Self::Model) -> Option<Self::Msg> {
-        match event {
-            _ => Some(Msg::IssueViewMsg(model.issue.event_to_msg(event)?)),
-        }
-    }
-
-    fn update(msg: Self::Msg, model: &mut Self::Model) -> meow::Cmd<Self::Request> {
-        match msg {
-            Msg::IssueViewMsg(IssueViewMsg::CloseView) => Cmd::Quit,
-            Msg::IssueViewMsg(msg) => model.issue.update(msg),
-        }
-    }
-
-    fn view<'m>(model: &'m Self::Model) -> Box<dyn meow::components::Renderable + 'm> {
-        Box::new(&model.issue)
-    }
-}
-
+#[cfg(feature = "tui")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    meow::run::<Tester>(None)?;
-
-    Ok(())
+    enabled::main()
 }
 
-fn fake_issue() -> github::Issue {
-    let date = DateTimeUtc::from_utc(
-        chrono::NaiveDate::from_ymd_opt(2022, 4, 12)
-            .unwrap()
-            .and_hms_opt(3, 45, 23)
-            .unwrap(),
-        chrono::Utc,
-    );
-    github::Issue {
+#[cfg(not(feature = "tui"))]
+fn main() {
+    println!("Enable the tui feature to run this binary.")
+}
+
+#[cfg(feature = "tui")]
+mod enabled {
+
+    use meow::{components::Component, App, Cmd};
+    use octerm::{
+        components::{IssueView, IssueViewMsg},
+        github::{self, events::DateTimeUtc, User},
+    };
+
+    enum Msg {
+        IssueViewMsg(IssueViewMsg),
+    }
+
+    struct Model {
+        issue: IssueView,
+    }
+
+    struct Tester {}
+
+    impl App for Tester {
+        type Msg = Msg;
+
+        type Model = Model;
+
+        type Request = ();
+        type Response = ();
+
+        fn init() -> Self::Model {
+            Model {
+                issue: fake_issue().into(),
+            }
+        }
+
+        fn event_to_msg(event: meow::AppEvent, model: &Self::Model) -> Option<Self::Msg> {
+            match event {
+                _ => Some(Msg::IssueViewMsg(model.issue.event_to_msg(event)?)),
+            }
+        }
+
+        fn update(msg: Self::Msg, model: &mut Self::Model) -> meow::Cmd<Self::Request> {
+            match msg {
+                Msg::IssueViewMsg(IssueViewMsg::CloseView) => Cmd::Quit,
+                Msg::IssueViewMsg(msg) => model.issue.update(msg),
+            }
+        }
+
+        fn view<'m>(model: &'m Self::Model) -> Box<dyn meow::components::Renderable + 'm> {
+            Box::new(&model.issue)
+        }
+    }
+
+    pub fn main() -> Result<(), Box<dyn std::error::Error>> {
+        meow::run::<Tester>(None)?;
+
+        Ok(())
+    }
+
+    fn fake_issue() -> github::Issue {
+        let date = DateTimeUtc::from_utc(
+            chrono::NaiveDate::from_ymd_opt(2022, 4, 12)
+                .unwrap()
+                .and_hms_opt(3, 45, 23)
+                .unwrap(),
+            chrono::Utc,
+        );
+        github::Issue {
         meta: github::IssueMeta {
             repo: github::RepoMeta {
                 name: "helix".into(),
@@ -120,4 +133,5 @@ config = {metals.ammoniteJvmProperties = ["-Xmx1G"]}
                 }.with(User::new("issue-author"), date + chrono::Days::new(3)),
             ],
         }
+    }
 }

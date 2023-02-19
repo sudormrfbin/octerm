@@ -1,28 +1,35 @@
-use meow::style::Color;
-
 use crate::github::{
     DiscussionState, IssueClosedReason, IssueState, NotificationTarget, PullRequestState,
 };
 
-pub fn notif_target_color(target: &NotificationTarget) -> Color {
+pub enum NotifColor {
+    Purple,
+    Green,
+    Red,
+    White,
+    Yellow,
+    Blue,
+}
+
+pub fn notif_target_color(target: &NotificationTarget) -> NotifColor {
     match target {
         NotificationTarget::Issue(ref issue) => match issue.state {
-            IssueState::Open => Color::Green,
-            IssueState::Closed(IssueClosedReason::NotPlanned) => Color::Red,
-            IssueState::Closed(IssueClosedReason::Completed) => Color::Purple,
+            IssueState::Open => NotifColor::Green,
+            IssueState::Closed(IssueClosedReason::NotPlanned) => NotifColor::Red,
+            IssueState::Closed(IssueClosedReason::Completed) => NotifColor::Purple,
         },
         NotificationTarget::PullRequest(ref pr) => match pr.state {
-            PullRequestState::Open => Color::Green,
-            PullRequestState::Merged => Color::Purple,
-            PullRequestState::Closed => Color::Red,
+            PullRequestState::Open => NotifColor::Green,
+            PullRequestState::Merged => NotifColor::Purple,
+            PullRequestState::Closed => NotifColor::Red,
         },
-        NotificationTarget::CiBuild => Color::Red,
-        NotificationTarget::Release(_) => Color::Blue,
+        NotificationTarget::CiBuild => NotifColor::Red,
+        NotificationTarget::Release(_) => NotifColor::Blue,
         NotificationTarget::Discussion(ref discussion) => match discussion.state {
-            DiscussionState::Unanswered => Color::Yellow,
-            DiscussionState::Answered => Color::Purple,
+            DiscussionState::Unanswered => NotifColor::Yellow,
+            DiscussionState::Answered => NotifColor::Purple,
         },
-        NotificationTarget::Unknown => Color::White,
+        NotificationTarget::Unknown => NotifColor::White,
     }
 }
 
