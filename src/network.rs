@@ -65,11 +65,11 @@ macro_rules! issue_or_pr {
     };
 }
 
-async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<()> {
+async fn pr_timeline(owner: &str, repo: &str, number: usize) -> Result<Option<Vec<Event>>> {
     let query_vars = graphql::pull_request_timeline_query::Variables {
-        owner: pr.repo.owner.clone(),
-        repo: pr.repo.name.clone(),
-        number: pr.number as i64,
+        owner: owner.to_owned(),
+        repo: repo.to_owned(),
+        number: number as i64,
     };
 
     let data =
@@ -349,7 +349,13 @@ async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<(
         Some(events)
     };
 
-    let events = convert_to_events().unwrap_or_default();
+    Ok(convert_to_events())
+}
+
+async fn open_pr(pr: PullRequestMeta, send: impl Fn(ServerResponse)) -> Result<()> {
+    let events = pr_timeline(&pr.repo.owner, &pr.repo.name, pr.number)
+        .await?
+        .unwrap_or_default();
     send(ServerResponse::PullRequest(PullRequest::new(pr, events)));
 
     Ok(())
