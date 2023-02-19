@@ -1180,6 +1180,7 @@ name = "octerm"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "crossterm",
  "env_logger",
  "futures",
  "graphql_client",

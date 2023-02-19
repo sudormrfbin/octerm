@@ -11,6 +11,19 @@ pub enum NotifColor {
     Blue,
 }
 
+impl From<NotifColor> for crossterm::style::Color {
+    fn from(value: NotifColor) -> Self {
+        match value {
+            NotifColor::Purple => crossterm::style::Color::Magenta,
+            NotifColor::Green => crossterm::style::Color::Green,
+            NotifColor::Red => crossterm::style::Color::Red,
+            NotifColor::White => crossterm::style::Color::White,
+            NotifColor::Yellow => crossterm::style::Color::Yellow,
+            NotifColor::Blue => crossterm::style::Color::Blue,
+        }
+    }
+}
+
 pub fn notif_target_color(target: &NotificationTarget) -> NotifColor {
     match target {
         NotificationTarget::Issue(ref issue) => match issue.state {
