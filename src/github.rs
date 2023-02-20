@@ -2,6 +2,7 @@ pub mod events;
 
 use std::fmt::Display;
 
+use crossterm::style::Stylize;
 use serde::{Deserialize, Serialize};
 
 use self::events::{DateTimeUtc, Event};
@@ -19,6 +20,16 @@ impl PartialEq for Notification {
 }
 
 impl Notification {
+    pub fn to_colored_string(&self) -> String {
+        let color = crate::util::notif_target_color(&self.target).into();
+        format!(
+            "{repo}: {icon} {title}",
+            repo = self.inner.repository.name,
+            icon = self.target.icon().with(color),
+            title = self.inner.subject.title.as_str().with(color),
+        )
+    }
+
     /// A sorting function that assigns ranks to a notification based on how
     /// relavant/irrelavant it is. A higher score means it can be marked as
     /// read quicker/needs less attention than a notification with a lower score.

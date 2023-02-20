@@ -27,16 +27,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(Signal::Success(cmd)) => match cmd.split_whitespace().collect::<Vec<_>>().as_slice()
             {
                 ["list" | "l"] => {
-                    for notif in notifs.iter().take(10) {
-                        let color = octerm::util::notif_target_color(&notif.target).into();
-                        println!(
-                            "{repo}: {icon} {title}",
-                            repo = notif.inner.repository.name,
-                            icon = notif.target.icon().with(color),
-                            title = notif.inner.subject.title.as_str().with(color),
-                        )
+                    for (i, notif) in notifs.iter().enumerate().rev() {
+                        println!("{i:2}. {}", notif.to_colored_string());
                     }
-                    println!("10/{len}...", len = notifs.len());
                 }
                 ["reload" | "r"] => {
                     println!("Syncing notifications");
