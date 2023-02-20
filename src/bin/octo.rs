@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ["list" | "l", args @ ..] => list(&notifications, args).await,
                     ["reload" | "r"] => reload(&mut notifications).await,
                     ["open" | "o", args @ ..] => open(&mut notifications, args).await,
-                    _ => Ok(()),
+                    _ => Err("Invalid command".to_string()),
                 };
 
                 if let Err(err) = cmd_result {
