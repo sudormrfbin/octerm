@@ -1,4 +1,4 @@
-use octerm::{error::Error, network::methods::open_notification_in_browser};
+use octerm::{error::Error, github::Notification, network::methods::open_notification_in_browser};
 use reedline::{DefaultPrompt, DefaultPromptSegment, Reedline, Signal};
 
 use crossterm::style::Stylize;
@@ -36,24 +36,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     notifs = octerm::network::methods::notifications(octocrab::instance()).await?;
                 }
                 ["open" | "o", args @ ..] => {
-                    for idx in args {
-                        match idx.parse::<usize>() {
-                            Err(_) => {
-                                println!("{}: `{idx}` should be a valid index", "Error".red())
-                            }
-                            Ok(idx) => match notifs.get(idx) {
-                                None => println!(
-                                    "{}: `{idx}` out of bounds in notifications list",
-                                    "Error".red()
-                                ),
-                                Some(notif) => match open_notification_in_browser(notif).await {
-                                    Ok(()) => {}
-                                    Err(_) => {
-                                        println!("{}: Could not open browser", "Error".red())
-                                    }
-                                },
-                            },
-                        };
+                    if let Err(err) = open(&mut notifs, args).await {
+                        print_error(&err);
                     }
                 }
                 _ => {}
@@ -62,4 +46,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     Ok(())
+}
+
+pub async fn open(notifs: &mut Vec<Notification>, args: &[&str]) -> Result<(), String> {
+    let indices: Vec<usize> = args
+        .iter()
+        .map(|idx| {
+            let idx = idx
+                .parse::<usize>()
+                .map_err(|_| format!("{idx} is not a valid index"))?;
+            match idx < notifs.len() {
+                true => Ok(idx),
+                false => Err(format!("{idx} is out of bounds in list")),
+            }
+        })
+        .collect::<Result<Vec<usize>, String>>()?;
+    let futs = indices
+        .iter()
+        .map(|i| &notifs[*i])
+        .map(|notification| open_notification_in_browser(&notification));
+    futures::future::join_all(futs)
+        .await
+        .into_iter()
+        .collect::<Result<Vec<()>, Error>>()
+        .map_err(|err| format!("Could not open browser: {err}"))?;
+
+    Ok(())
+}
+
+pub fn print_error(msg: &str) {
+    println!("{}: {msg}", "Error".red())
 }
