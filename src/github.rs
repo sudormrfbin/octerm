@@ -181,6 +181,16 @@ pub enum IssueState {
     Closed(IssueClosedReason),
 }
 
+impl IssueState {
+    pub fn is_open(&self) -> bool {
+        matches!(self, IssueState::Open)
+    }
+
+    pub fn is_closed(&self) -> bool {
+        matches!(self, IssueState::Closed(_))
+    }
+}
+
 #[derive(Clone, PartialEq, Eq)]
 pub enum IssueClosedReason {
     // Done, closed, fixed, resolved, etc.
@@ -263,6 +273,20 @@ pub enum PullRequestState {
     Open,
     Closed,
     Merged,
+}
+
+impl PullRequestState {
+    pub fn is_open(&self) -> bool {
+        matches!(self, PullRequestState::Open)
+    }
+
+    pub fn is_closed(&self) -> bool {
+        matches!(self, PullRequestState::Closed)
+    }
+
+    pub fn is_merged(&self) -> bool {
+        matches!(self, PullRequestState::Merged)
+    }
 }
 
 impl Display for PullRequestState {

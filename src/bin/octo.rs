@@ -1,4 +1,8 @@
-use octerm::{error::Error, github::Notification, network::methods::open_notification_in_browser};
+use octerm::{
+    error::Error,
+    github::{Notification, NotificationTarget},
+    network::methods::open_notification_in_browser,
+};
 use reedline::{DefaultPrompt, DefaultPromptSegment, Reedline, Signal};
 
 use crossterm::style::Stylize;
@@ -26,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Ok(Signal::Success(cmd)) => {
                 let cmd_result = match cmd.split_whitespace().collect::<Vec<_>>().as_slice() {
-                    ["list" | "l"] => list(&notifications).await,
+                    ["list" | "l", args @ ..] => list(&notifications, args).await,
                     ["reload" | "r"] => reload(&mut notifications).await,
                     ["open" | "o", args @ ..] => open(&mut notifications, args).await,
                     _ => Ok(()),
@@ -42,8 +46,69 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-pub async fn list(notifications: &[Notification]) -> Result<(), String> {
-    for (i, notif) in notifications.iter().enumerate().rev() {
+pub async fn list(notifications: &[Notification], args: &[&str]) -> Result<(), String> {
+    // TODO: Robust parsing (invalid tokens, etc)
+
+    let is_pr = args.contains(&"pr");
+    let is_issue = args.contains(&"issue");
+    let is_closed = args.contains(&"closed");
+    let is_open = args.contains(&"open");
+    let is_merged = args.contains(&"merged");
+    let is_release = args.contains(&"release");
+    let is_discussion = args.contains(&"discussion");
+
+    if true_count(&[is_pr, is_issue, is_release, is_discussion]) > 1 {
+        return Err("pr, issue, discussion, release are mutually exclusive".to_string());
+    }
+
+    if true_count(&[is_open, is_closed, is_merged]) > 1 {
+        return Err("pr, issue, merged are mutually exclusive".to_string());
+    }
+
+    let filter_by_type = |n: &Notification| -> bool {
+        if is_pr {
+            matches!(n.target, NotificationTarget::PullRequest(_))
+        } else if is_issue {
+            matches!(n.target, NotificationTarget::Issue(_))
+        } else if is_release {
+            matches!(n.target, NotificationTarget::Release(_))
+        } else if is_discussion {
+            matches!(n.target, NotificationTarget::Discussion(_))
+        } else {
+            true
+        }
+    };
+
+    let filter_by_state = |n: &Notification| -> bool {
+        if is_open {
+            match n.target {
+                NotificationTarget::Issue(ref issue) => issue.state.is_open(),
+                NotificationTarget::PullRequest(ref pr) => pr.state.is_open(),
+                _ => false,
+            }
+        } else if is_closed {
+            match n.target {
+                NotificationTarget::Issue(ref issue) => issue.state.is_closed(),
+                NotificationTarget::PullRequest(ref pr) => pr.state.is_closed(),
+                _ => false,
+            }
+        } else if is_merged {
+            match n.target {
+                NotificationTarget::PullRequest(ref pr) => pr.state.is_merged(),
+                _ => false,
+            }
+        } else {
+            true
+        }
+    };
+
+    let list = notifications
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| filter_by_type(n))
+        .filter(|(_, n)| filter_by_state(n));
+
+    for (i, notif) in list.rev() {
         println!("{i:2}. {}", notif.to_colored_string());
     }
 
@@ -87,4 +152,8 @@ pub async fn open(notifications: &mut Vec<Notification>, args: &[&str]) -> Resul
 
 pub fn print_error(msg: &str) {
     println!("{}: {msg}", "Error".red())
+}
+
+fn true_count(bools: &[bool]) -> usize {
+    bools.into_iter().map(|b| *b as usize).sum()
 }
