@@ -12,12 +12,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     octocrab::initialise(builder)?;
 
     println!("Syncing notifications");
-    let mut notifs = octerm::network::methods::notifications(octocrab::instance()).await?;
+    let mut notifications = octerm::network::methods::notifications(octocrab::instance()).await?;
     let mut line_editor = Reedline::create();
     let mut prompt = DefaultPrompt::new(DefaultPromptSegment::Empty, DefaultPromptSegment::Empty);
 
     loop {
-        prompt.left_prompt = DefaultPromptSegment::Basic(format!("{} ", notifs.len()));
+        prompt.left_prompt = DefaultPromptSegment::Basic(format!("{} ", notifications.len()));
         let sig = line_editor.read_line(&prompt);
         match sig {
             Ok(Signal::CtrlD) | Ok(Signal::CtrlC) => {
@@ -26,9 +26,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Ok(Signal::Success(cmd)) => {
                 let cmd_result = match cmd.split_whitespace().collect::<Vec<_>>().as_slice() {
-                    ["list" | "l"] => list(&notifs).await,
-                    ["reload" | "r"] => reload(&mut notifs).await,
-                    ["open" | "o", args @ ..] => open(&mut notifs, args).await,
+                    ["list" | "l"] => list(&notifications).await,
+                    ["reload" | "r"] => reload(&mut notifications).await,
+                    ["open" | "o", args @ ..] => open(&mut notifications, args).await,
                     _ => Ok(()),
                 };
 
@@ -42,31 +42,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-pub async fn list(notifs: &[Notification]) -> Result<(), String> {
-    for (i, notif) in notifs.iter().enumerate().rev() {
+pub async fn list(notifications: &[Notification]) -> Result<(), String> {
+    for (i, notif) in notifications.iter().enumerate().rev() {
         println!("{i:2}. {}", notif.to_colored_string());
     }
 
     Ok(())
 }
 
-pub async fn reload(notifs: &mut Vec<Notification>) -> Result<(), String> {
+pub async fn reload(notifications: &mut Vec<Notification>) -> Result<(), String> {
     println!("Syncing notifications");
-    *notifs = octerm::network::methods::notifications(octocrab::instance())
+    *notifications = octerm::network::methods::notifications(octocrab::instance())
         .await
         .map_err(|err| err.to_string())?;
 
     Ok(())
 }
 
-pub async fn open(notifs: &mut Vec<Notification>, args: &[&str]) -> Result<(), String> {
+pub async fn open(notifications: &mut Vec<Notification>, args: &[&str]) -> Result<(), String> {
     let indices: Vec<usize> = args
         .iter()
         .map(|idx| {
             let idx = idx
                 .parse::<usize>()
                 .map_err(|_| format!("{idx} is not a valid index"))?;
-            match idx < notifs.len() {
+            match idx < notifications.len() {
                 true => Ok(idx),
                 false => Err(format!("{idx} is out of bounds in list")),
             }
@@ -74,7 +74,7 @@ pub async fn open(notifs: &mut Vec<Notification>, args: &[&str]) -> Result<(), S
         .collect::<Result<Vec<usize>, String>>()?;
     let futs = indices
         .iter()
-        .map(|i| &notifs[*i])
+        .map(|i| &notifications[*i])
         .map(|notification| open_notification_in_browser(&notification));
     futures::future::join_all(futs)
         .await
