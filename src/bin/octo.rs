@@ -24,27 +24,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Exiting.");
                 break;
             }
-            Ok(Signal::Success(cmd)) => match cmd.split_whitespace().collect::<Vec<_>>().as_slice()
-            {
-                ["list" | "l"] => {
-                    for (i, notif) in notifs.iter().enumerate().rev() {
-                        println!("{i:2}. {}", notif.to_colored_string());
-                    }
+            Ok(Signal::Success(cmd)) => {
+                let cmd_result = match cmd.split_whitespace().collect::<Vec<_>>().as_slice() {
+                    ["list" | "l"] => list(&notifs).await,
+                    ["reload" | "r"] => reload(&mut notifs).await,
+                    ["open" | "o", args @ ..] => open(&mut notifs, args).await,
+                    _ => Ok(()),
+                };
+
+                if let Err(err) = cmd_result {
+                    print_error(&err);
                 }
-                ["reload" | "r"] => {
-                    println!("Syncing notifications");
-                    notifs = octerm::network::methods::notifications(octocrab::instance()).await?;
-                }
-                ["open" | "o", args @ ..] => {
-                    if let Err(err) = open(&mut notifs, args).await {
-                        print_error(&err);
-                    }
-                }
-                _ => {}
-            },
+            }
             Err(err) => eprintln!("Error: {err}"),
         }
     }
+    Ok(())
+}
+
+pub async fn list(notifs: &[Notification]) -> Result<(), String> {
+    for (i, notif) in notifs.iter().enumerate().rev() {
+        println!("{i:2}. {}", notif.to_colored_string());
+    }
+
+    Ok(())
+}
+
+pub async fn reload(notifs: &mut Vec<Notification>) -> Result<(), String> {
+    println!("Syncing notifications");
+    *notifs = octerm::network::methods::notifications(octocrab::instance())
+        .await
+        .map_err(|err| err.to_string())?;
+
     Ok(())
 }
 
