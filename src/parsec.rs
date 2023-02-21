@@ -33,6 +33,21 @@ pub fn many1<Output>(
     }
 }
 
+pub fn many<Output>(
+    parse: impl Fn(&str) -> Result<(&str, Output), &str>,
+) -> impl Fn(&str) -> Result<(&str, Vec<Output>), &str> {
+    move |mut input: &str| {
+        let mut output = Vec::new();
+
+        while let Ok((inp, out)) = parse(input) {
+            input = inp;
+            output.push(out);
+        }
+
+        Ok((input, output))
+    }
+}
+
 pub fn whitespace() -> impl Fn(&str) -> Result<(&str, Vec<char>), &str> {
     move |input: &str| many1(pred(|ch| ch.is_whitespace()))(input)
 }
@@ -95,6 +110,14 @@ mod test {
         assert_eq!(parse("123"), Ok(("", vec!['1', '2', '3'])));
         assert_eq!(parse("12q3"), Ok(("q3", vec!['1', '2'])));
         assert!(parse("q3").is_err());
+    }
+
+    #[test]
+    fn test_many() {
+        let parse = many(pred(|ch| ch.is_digit(10)));
+        assert_eq!(parse("123"), Ok(("", vec!['1', '2', '3'])));
+        assert_eq!(parse("12q3"), Ok(("q3", vec!['1', '2'])));
+        assert_eq!(parse("q3"), Ok(("q3", vec![])));
     }
 
     #[test]
