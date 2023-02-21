@@ -12,4 +12,5 @@ pub mod markdown;
 
 pub mod network;
 pub mod parsec;
+pub mod parser;
 pub mod util;
