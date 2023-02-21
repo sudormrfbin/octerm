@@ -1,6 +1,6 @@
 //! Parser combinators used to parse the custom command line syntax.
 
-pub fn literal(lit: &'static str) -> impl Fn(&str) -> Result<(&str, &'static str), &str> {
+pub fn literal<'a>(lit: &'a str) -> impl Fn(&str) -> Result<(&str, &'a str), &str> {
     move |input: &str| {
         input
             .strip_prefix(lit)
@@ -37,6 +37,17 @@ pub fn whitespace() -> impl Fn(&str) -> Result<(&str, Vec<char>), &str> {
     move |input: &str| many1(pred(|ch| ch.is_whitespace()))(input)
 }
 
+pub fn any<Output>(
+    parsers: &[impl Fn(&str) -> Result<(&str, Output), &str>],
+) -> impl Fn(&str) -> Result<(&str, Output), &str> + '_ {
+    move |input: &str| {
+        parsers
+            .iter()
+            .find_map(|p| p(input).ok())
+            .ok_or_else(|| "Did not match any parser")
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -71,5 +82,14 @@ mod test {
         assert_eq!(parse("  "), Ok(("", vec![' ', ' '])));
         assert_eq!(parse("\n "), Ok(("", vec!['\n', ' '])));
         assert!(parse("q").is_err());
+    }
+
+    #[test]
+    fn test_any() {
+        let cmds = [literal("open"), literal("done")];
+        let parse = any(&cmds);
+        assert_eq!(parse("open 1 2"), Ok((" 1 2", "open")));
+        assert_eq!(parse("done"), Ok(("", "done")));
+        assert!(parse("list").is_err());
     }
 }
