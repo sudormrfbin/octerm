@@ -1,7 +1,8 @@
+use futures::TryFutureExt;
 use octerm::{
     error::Error,
     github::{Notification, NotificationTarget},
-    network::methods::open_notification_in_browser,
+    network::methods::{mark_notification_as_read, open_notification_in_browser},
 };
 use reedline::{DefaultPrompt, DefaultPromptSegment, Reedline, Signal};
 
@@ -33,6 +34,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ["list" | "l", args @ ..] => list(&notifications, args).await,
                     ["reload" | "r"] => reload(&mut notifications).await,
                     ["open" | "o", args @ ..] => open(&mut notifications, args).await,
+                    ["done" | "d", args @ ..] => {
+                        let result = done(&mut notifications, args).await;
+                        // Print the list again since done will change the indices
+                        let _ = list(&notifications, &[]).await;
+                        result
+                    }
                     _ => Err("Invalid command".to_string()),
                 };
 
@@ -125,18 +132,8 @@ pub async fn reload(notifications: &mut Vec<Notification>) -> Result<(), String>
 }
 
 pub async fn open(notifications: &mut Vec<Notification>, args: &[&str]) -> Result<(), String> {
-    let indices: Vec<usize> = args
-        .iter()
-        .map(|idx| {
-            let idx = idx
-                .parse::<usize>()
-                .map_err(|_| format!("{idx} is not a valid index"))?;
-            match idx < notifications.len() {
-                true => Ok(idx),
-                false => Err(format!("{idx} is out of bounds in list")),
-            }
-        })
-        .collect::<Result<Vec<usize>, String>>()?;
+    let indices = validate_indices(args, notifications.len())?;
+
     let futs = indices
         .iter()
         .map(|i| &notifications[*i])
@@ -148,6 +145,49 @@ pub async fn open(notifications: &mut Vec<Notification>, args: &[&str]) -> Resul
         .map_err(|err| format!("Could not open browser: {err}"))?;
 
     Ok(())
+}
+
+pub async fn done(notifications: &mut Vec<Notification>, args: &[&str]) -> Result<(), String> {
+    let indices = validate_indices(args, notifications.len())?;
+
+    let octo = octocrab::instance();
+    let futs = indices
+        .iter()
+        .map(|i| (i, &notifications[*i]))
+        .map(|(i, notification)| {
+            mark_notification_as_read(&octo, notification.inner.id).map_ok(|_| *i)
+        });
+    let marked = futures::future::join_all(futs).await;
+    let has_error = marked.iter().find(|m| m.is_err()).is_some();
+    let mut marked: Vec<usize> = marked.into_iter().filter_map(|m| m.ok()).collect();
+    marked.sort();
+
+    for idx in marked.iter().rev() {
+        // Remove from the end so that indices stay stable as items are removed.
+        notifications.remove(*idx);
+    }
+
+    if has_error {
+        return Err("Some notifications could not be marked as read".to_string());
+    }
+
+    Ok(())
+}
+
+/// Convert a list of strings to a list of indices, ensuring that each is
+/// a valid index.
+fn validate_indices(args: &[&str], list_len: usize) -> Result<Vec<usize>, String> {
+    args.iter()
+        .map(|idx| {
+            let idx = idx
+                .parse::<usize>()
+                .map_err(|_| format!("{idx} is not a valid index"))?;
+            match idx < list_len {
+                true => Ok(idx),
+                false => Err(format!("{idx} is out of bounds in list")),
+            }
+        })
+        .collect()
 }
 
 pub fn print_error(msg: &str) {
