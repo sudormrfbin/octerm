@@ -17,7 +17,27 @@ pub fn args() -> impl Fn(&str) -> Result<(&str, Vec<String>), &str> {
     }
 }
 
+pub fn uint() -> impl Fn(&str) -> Result<(&str, usize), &str> {
+    |input: &str| {
+        let (rem, chars) = many1(pred(|ch| ch.is_ascii_digit()))(input)?;
+        let uint = chars
+            .iter()
+            .collect::<String>()
+            .parse()
+            .map_err(|_| "Could not parse as unsigned integer")?;
+        Ok((rem, uint))
+    }
+}
+
+pub fn uint_args() -> impl Fn(&str) -> Result<(&str, Vec<usize>), &str> {
+    |input: &str| {
+        let arg = left(and(uint(), whitespace0()));
+        many0(arg)(input)
+    }
+}
+
 #[cfg(test)]
+
 mod test {
     use super::*;
 
@@ -51,6 +71,25 @@ mod test {
             parse("list pr| open"),
             Ok(("| open", vec![s!("list"), s!("pr")]))
         );
+        assert_eq!(parse(""), Ok(("", vec![])));
+        assert_eq!(parse("  "), Ok(("  ", vec![])));
+    }
+
+    #[test]
+    fn test_uint() {
+        let parse = uint();
+        assert_eq!(parse("124"), Ok(("", 124)));
+        assert_eq!(parse("1 | done"), Ok((" | done", 1)));
+        assert!(parse("").is_err())
+    }
+
+    #[test]
+    fn test_uint_args() {
+        let parse = uint_args();
+        assert_eq!(parse("12 23 345"), Ok(("", vec![12, 23, 345])));
+        assert_eq!(parse("12 23 "), Ok(("", vec![12, 23])));
+        assert_eq!(parse("12 23 | open"), Ok(("| open", vec![12, 23])));
+        assert_eq!(parse("12 23| open"), Ok(("| open", vec![12, 23])));
         assert_eq!(parse(""), Ok(("", vec![])));
         assert_eq!(parse("  "), Ok(("  ", vec![])));
     }
