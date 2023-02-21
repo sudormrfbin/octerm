@@ -48,6 +48,18 @@ pub fn any<Output>(
     }
 }
 
+pub fn and<P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Fn(&str) -> Result<(&str, (O1, O2)), &str>
+where
+    P1: Fn(&str) -> Result<(&str, O1), &str>,
+    P2: Fn(&str) -> Result<(&str, O2), &str>,
+{
+    move |input: &str| {
+        let (input, o1) = p1(input)?;
+        let (input, o2) = p2(input)?;
+        Ok((input, (o1, o2)))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -91,5 +103,13 @@ mod test {
         assert_eq!(parse("open 1 2"), Ok((" 1 2", "open")));
         assert_eq!(parse("done"), Ok(("", "done")));
         assert!(parse("list").is_err());
+    }
+
+    #[test]
+    fn test_and() {
+        let parse = and(literal("list"), whitespace());
+        assert_eq!(parse("list  "), Ok(("", ("list", vec![' ', ' ']))));
+        let parse = and(and(literal("list"), whitespace()), literal("pr"));
+        assert_eq!(parse("list pr"), Ok(("", (("list", vec![' ']), "pr"))));
     }
 }
