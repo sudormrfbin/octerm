@@ -27,18 +27,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Exiting.");
                 break;
             }
-            Ok(Signal::Success(cmd)) => {
-                let cmd_result = match cmd.split_whitespace().collect::<Vec<_>>().as_slice() {
-                    ["list" | "l", args @ ..] => list(&notifications, args).await,
-                    ["reload" | "r"] => reload(&mut notifications).await,
-                    ["open" | "o", args @ ..] => open(&mut notifications, args, None).await,
-                    ["done" | "d", args @ ..] => {
-                        let result = done(&mut notifications, args, None).await;
-                        // Print the list again since done will change the indices
-                        let _ = list(&notifications, &[]).await;
-                        result
+            Ok(Signal::Success(cmdline)) => {
+                let cmds: Vec<&str> = cmdline.split('|').collect();
+                let cmd_result = match &cmds[..] {
+                    [] => Ok(()),
+                    [producer] if PRODUCERS.contains(producer) => {
+                        handle_producer(&tokenize(&producer), &notifications).await
                     }
-                    _ => Err("Invalid command".to_string()),
+                    [consumer] if CONSUMERS.contains(consumer) => {
+                        handle_consumer(&tokenize(&consumer), &mut notifications, None).await
+                    }
+                    [command] if COMMANDS.contains(command) => {
+                        handle_command(&tokenize(&command), &mut notifications).await
+                    }
+                    [invalid] => Err(format!("Invalid command '{invalid}'")),
+                    [producer, adapters @ .., consumer] => {
+                        handle_producer(&tokenize(&producer), &notifications).await
+                    }
                 };
 
                 if let Err(err) = cmd_result {
@@ -49,6 +54,51 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     Ok(())
+}
+
+// TODO: Change to hashmap?
+pub const PRODUCERS: &[&'static str] = &["list"];
+pub const CONSUMERS: &[&'static str] = &["open", "done"];
+pub const COMMANDS: &[&'static str] = &["reload"];
+pub const ADAPTERS: &[&'static str] = &[];
+
+fn tokenize(cmd: &str) -> Vec<&str> {
+    cmd.split_whitespace().collect()
+}
+
+async fn handle_producer(tokens: &[&str], notifications: &[Notification]) -> Result<(), String> {
+    match tokens {
+        ["list" | "l", args @ ..] => list(&notifications, args).await,
+        [] => Ok(()),
+        _ => Err("Invalid command".to_string()),
+    }
+}
+
+async fn handle_consumer(
+    tokens: &[&str],
+    mut notifications: &mut Vec<Notification>,
+    piped: Option<Vec<usize>>,
+) -> Result<(), String> {
+    match tokens {
+        ["open" | "o", args @ ..] => open(&mut notifications, args, piped).await,
+        ["done" | "d", args @ ..] => {
+            let result = done(&mut notifications, args, piped).await;
+            // Print the list again since done will change the indices
+            let _ = list(&notifications, &[]).await;
+            result
+        }
+        _ => Err("Invalid command".to_string()),
+    }
+}
+
+async fn handle_command(
+    tokens: &[&str],
+    mut notifications: &mut Vec<Notification>,
+) -> Result<(), String> {
+    match tokens {
+        ["reload" | "r"] => reload(&mut notifications).await,
+        _ => Err("Invalid command".to_string()),
+    }
 }
 
 pub async fn list(notifications: &[Notification], args: &[&str]) -> Result<(), String> {
