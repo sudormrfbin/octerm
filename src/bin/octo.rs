@@ -1,8 +1,6 @@
-use futures::TryFutureExt;
 use octerm::{
     error::Error,
     github::{Notification, NotificationTarget},
-    network::methods::{mark_notification_as_read, open_notification_in_browser},
 };
 use reedline::{DefaultPrompt, DefaultPromptSegment, Reedline, Signal};
 
@@ -33,9 +31,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let cmd_result = match cmd.split_whitespace().collect::<Vec<_>>().as_slice() {
                     ["list" | "l", args @ ..] => list(&notifications, args).await,
                     ["reload" | "r"] => reload(&mut notifications).await,
-                    ["open" | "o", args @ ..] => open(&mut notifications, args).await,
+                    ["open" | "o", args @ ..] => open(&mut notifications, args, None).await,
                     ["done" | "d", args @ ..] => {
-                        let result = done(&mut notifications, args).await;
+                        let result = done(&mut notifications, args, None).await;
                         // Print the list again since done will change the indices
                         let _ = list(&notifications, &[]).await;
                         result
@@ -131,47 +129,96 @@ pub async fn reload(notifications: &mut Vec<Notification>) -> Result<(), String>
     Ok(())
 }
 
-pub async fn open(notifications: &mut Vec<Notification>, args: &[&str]) -> Result<(), String> {
-    let indices = validate_indices(args, notifications.len())?;
-
-    let futs = indices
-        .iter()
-        .map(|i| &notifications[*i])
-        .map(|notification| open_notification_in_browser(&notification));
-    futures::future::join_all(futs)
-        .await
-        .into_iter()
-        .collect::<Result<Vec<()>, Error>>()
-        .map_err(|err| format!("Could not open browser: {err}"))?;
-
-    Ok(())
+pub async fn open(
+    notifications: &mut Vec<Notification>,
+    args: &[&str],
+    piped: Option<Vec<usize>>,
+) -> Result<(), String> {
+    let indices = arg_or_pipe_indices(args, piped, notifications.len())?;
+    consumers::open(notifications, &indices).await
 }
 
-pub async fn done(notifications: &mut Vec<Notification>, args: &[&str]) -> Result<(), String> {
-    let indices = validate_indices(args, notifications.len())?;
+pub async fn done(
+    notifications: &mut Vec<Notification>,
+    args: &[&str],
+    piped: Option<Vec<usize>>,
+) -> Result<(), String> {
+    let indices = arg_or_pipe_indices(args, piped, notifications.len())?;
+    consumers::done(notifications, &indices).await
+}
 
-    let octo = octocrab::instance();
-    let futs = indices
-        .iter()
-        .map(|i| (i, &notifications[*i]))
-        .map(|(i, notification)| {
-            mark_notification_as_read(&octo, notification.inner.id).map_ok(|_| *i)
-        });
-    let marked = futures::future::join_all(futs).await;
-    let has_error = marked.iter().find(|m| m.is_err()).is_some();
-    let mut marked: Vec<usize> = marked.into_iter().filter_map(|m| m.ok()).collect();
-    marked.sort();
+pub mod consumers {
+    use futures::TryFutureExt;
+    use octerm::{
+        error::Error,
+        github::Notification,
+        network::methods::{mark_notification_as_read, open_notification_in_browser},
+    };
 
-    for idx in marked.iter().rev() {
-        // Remove from the end so that indices stay stable as items are removed.
-        notifications.remove(*idx);
+    pub async fn open(
+        notifications: &mut Vec<Notification>,
+        filter: &[usize],
+    ) -> Result<(), String> {
+        let futs = filter
+            .iter()
+            .map(|i| &notifications[*i])
+            .map(|notification| open_notification_in_browser(&notification));
+        futures::future::join_all(futs)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<()>, Error>>()
+            .map_err(|err| format!("Could not open browser: {err}"))?;
+
+        Ok(())
     }
 
-    if has_error {
-        return Err("Some notifications could not be marked as read".to_string());
-    }
+    pub async fn done(
+        notifications: &mut Vec<Notification>,
+        filter: &[usize],
+    ) -> Result<(), String> {
+        let octo = octocrab::instance();
+        let futs = filter
+            .iter()
+            .map(|i| (i, &notifications[*i]))
+            .map(|(i, notification)| {
+                mark_notification_as_read(&octo, notification.inner.id).map_ok(|_| *i)
+            });
+        let marked = futures::future::join_all(futs).await;
+        let has_error = marked.iter().find(|m| m.is_err()).is_some();
+        let mut marked: Vec<usize> = marked.into_iter().filter_map(|m| m.ok()).collect();
+        marked.sort();
 
-    Ok(())
+        for idx in marked.iter().rev() {
+            // Remove from the end so that indices stay stable as items are removed.
+            notifications.remove(*idx);
+        }
+
+        if has_error {
+            return Err("Some notifications could not be marked as read".to_string());
+        }
+
+        Ok(())
+    }
+}
+
+/// For commands that accept both arguments and piped values, return the set
+/// of indices that they should act on. Arguments and piped values are mutually
+/// exclusive.
+fn arg_or_pipe_indices(
+    args: &[&str],
+    piped: Option<Vec<usize>>,
+    list_len: usize,
+) -> Result<Vec<usize>, String> {
+    let indices = match (args, piped) {
+        ([], None) => return Err("No data recieved as arguments or from pipe".to_string()),
+        ([_, ..], Some(_)) => {
+            // Both args and piped values given
+            return Err("Cannot take arguments when used at end of pipe".to_string());
+        }
+        (args @ [_, ..], None) => validate_indices(args, list_len)?,
+        ([], Some(filter)) => filter,
+    };
+    Ok(indices)
 }
 
 /// Convert a list of strings to a list of indices, ensuring that each is
