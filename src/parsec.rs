@@ -48,7 +48,7 @@ pub fn many<Output>(
     }
 }
 
-pub fn whitespace() -> impl Fn(&str) -> Result<(&str, Vec<char>), &str> {
+pub fn whitespace1() -> impl Fn(&str) -> Result<(&str, Vec<char>), &str> {
     move |input: &str| many1(pred(|ch| ch.is_whitespace()))(input)
 }
 
@@ -121,8 +121,8 @@ mod test {
     }
 
     #[test]
-    fn test_whitespace() {
-        let parse = whitespace();
+    fn test_whitespace1() {
+        let parse = whitespace1();
         assert_eq!(parse("  1"), Ok(("1", vec![' ', ' '])));
         assert_eq!(parse("  "), Ok(("", vec![' ', ' '])));
         assert_eq!(parse("\n "), Ok(("", vec!['\n', ' '])));
@@ -140,15 +140,15 @@ mod test {
 
     #[test]
     fn test_and() {
-        let parse = and(literal("list"), whitespace());
+        let parse = and(literal("list"), whitespace1());
         assert_eq!(parse("list  "), Ok(("", ("list", vec![' ', ' ']))));
-        let parse = and(and(literal("list"), whitespace()), literal("pr"));
+        let parse = and(and(literal("list"), whitespace1()), literal("pr"));
         assert_eq!(parse("list pr"), Ok(("", (("list", vec![' ']), "pr"))));
     }
 
     #[test]
     fn test_left() {
-        let list_and_whitespace = and(literal("list"), whitespace());
+        let list_and_whitespace = and(literal("list"), whitespace1());
         let parse = and(left(list_and_whitespace), literal("pr"));
         assert_eq!(parse("list pr"), Ok(("", ("list", "pr"))));
     }
