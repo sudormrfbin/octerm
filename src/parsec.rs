@@ -52,6 +52,10 @@ pub fn whitespace1() -> impl Fn(&str) -> Result<(&str, Vec<char>), &str> {
     move |input: &str| many1(pred(|ch| ch.is_whitespace()))(input)
 }
 
+pub fn whitespace0() -> impl Fn(&str) -> Result<(&str, Vec<char>), &str> {
+    move |input: &str| many0(pred(|ch| ch.is_whitespace()))(input)
+}
+
 pub fn any<Output>(
     parsers: &[impl Fn(&str) -> Result<(&str, Output), &str>],
 ) -> impl Fn(&str) -> Result<(&str, Output), &str> + '_ {
@@ -127,6 +131,15 @@ mod test {
         assert_eq!(parse("  "), Ok(("", vec![' ', ' '])));
         assert_eq!(parse("\n "), Ok(("", vec!['\n', ' '])));
         assert!(parse("q").is_err());
+    }
+
+    #[test]
+    fn test_whitespace0() {
+        let parse = whitespace0();
+        assert_eq!(parse("  1"), Ok(("1", vec![' ', ' '])));
+        assert_eq!(parse("  "), Ok(("", vec![' ', ' '])));
+        assert_eq!(parse("\n "), Ok(("", vec!['\n', ' '])));
+        assert_eq!(parse("q"), Ok(("q", vec![])));
     }
 
     #[test]
