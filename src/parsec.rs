@@ -33,7 +33,7 @@ pub fn many1<Output>(
     }
 }
 
-pub fn many<Output>(
+pub fn many0<Output>(
     parse: impl Fn(&str) -> Result<(&str, Output), &str>,
 ) -> impl Fn(&str) -> Result<(&str, Vec<Output>), &str> {
     move |mut input: &str| {
@@ -113,8 +113,8 @@ mod test {
     }
 
     #[test]
-    fn test_many() {
-        let parse = many(pred(|ch| ch.is_digit(10)));
+    fn test_many0() {
+        let parse = many0(pred(|ch| ch.is_digit(10)));
         assert_eq!(parse("123"), Ok(("", vec!['1', '2', '3'])));
         assert_eq!(parse("12q3"), Ok(("q3", vec!['1', '2'])));
         assert_eq!(parse("q3"), Ok(("q3", vec![])));
