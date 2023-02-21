@@ -60,6 +60,16 @@ where
     }
 }
 
+pub fn left<P, O1, O2>(parser: P) -> impl Fn(&str) -> Result<(&str, O1), &str>
+where
+    P: Fn(&str) -> Result<(&str, (O1, O2)), &str>,
+{
+    move |input: &str| {
+        let (input, (o1, _)) = parser(input)?;
+        Ok((input, o1))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -111,5 +121,12 @@ mod test {
         assert_eq!(parse("list  "), Ok(("", ("list", vec![' ', ' ']))));
         let parse = and(and(literal("list"), whitespace()), literal("pr"));
         assert_eq!(parse("list pr"), Ok(("", (("list", vec![' ']), "pr"))));
+    }
+
+    #[test]
+    fn test_left() {
+        let list_and_whitespace = and(literal("list"), whitespace());
+        let parse = and(left(list_and_whitespace), literal("pr"));
+        assert_eq!(parse("list pr"), Ok(("", ("list", "pr"))));
     }
 }
