@@ -11,4 +11,5 @@ pub mod github;
 pub mod markdown;
 
 pub mod network;
+pub mod parsec;
 pub mod util;
