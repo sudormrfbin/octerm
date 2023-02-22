@@ -99,12 +99,13 @@ pub fn producer_expr() -> impl Fn(&str) -> ParseResult<ProducerPipe> {
     let piped_adapters = many0(piped_adapter);
     let piped_consumer = right(and(pipe(), consumer_with_args()));
 
-    let producer_pipe_expr = and(
+    let producer_expr = and(
         and(producer_with_args(), piped_adapters),
         maybe(piped_consumer),
     );
+    let producer_expr = eof(producer_expr);
     map(
-        producer_pipe_expr,
+        producer_expr,
         |((prod_with_args, adap_with_args), cons_with_args)| ProducerPipe {
             producer: prod_with_args,
             adapters: adap_with_args,
@@ -427,6 +428,7 @@ mod test {
         };
 
         test("list", prod!(List), vec![], None);
+        assert!(parse("lister").is_err());
         test("list pr open", prod!(List, ["pr", "open"]), vec![], None);
         test("list pr open ", prod!(List, ["pr", "open"]), vec![], None);
         test("list|confirm", prod!(List), vec![adap!(Confirm)], None);
