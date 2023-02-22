@@ -4,7 +4,7 @@
 use crate::parsec::*;
 
 use self::types::{
-    Adapter, AdapterWithArgs, Command, Consumer, ConsumerWithArgs, Producer, ProducerExpr,
+    Adapter, AdapterWithArgs, Command, Consumer, ConsumerWithArgs, Parsed, Producer, ProducerExpr,
     ProducerWithArgs,
 };
 
@@ -111,6 +111,16 @@ pub fn producer_expr() -> impl Fn(&str) -> ParseResult<ProducerExpr> {
             consumer: cons,
         }
     })
+}
+
+pub fn parser() -> impl Fn(&str) -> ParseResult<Parsed> {
+    let command = map(eof(command()), |cmd| Parsed::Command(cmd));
+    let prod_expr = map(producer_expr(), |expr| Parsed::ProducerExpr(expr));
+    let cons_with_args = map(eof(consumer_with_args()), |cons| {
+        Parsed::ConsumerWithArgs(cons)
+    });
+
+    or(or(command, prod_expr), cons_with_args)
 }
 
 pub mod types {
@@ -237,10 +247,10 @@ pub mod types {
         pub consumer: Option<Consumer>,
     }
 
+    #[derive(Debug, PartialEq)]
     pub enum Parsed {
         Command(Command),
-        ProducerWithArgs(ProducerWithArgs),
-        ProducerPipe(ProducerExpr),
+        ProducerExpr(ProducerExpr),
         ConsumerWithArgs(ConsumerWithArgs),
     }
 }
@@ -460,6 +470,31 @@ mod test {
             "list|confirm|confirm|done",
             pexpr!(List => [Confirm] => [Confirm] => Done),
             "bare producer and bare adapter*s* and bare consumer"
+        );
+    }
+
+    #[test]
+    fn test_parser() {
+        let parse = parser();
+
+        assert_eq!(parse("reload"), Ok(("", Parsed::Command(Command::Reload))));
+        assert_eq!(parse("list"), Ok(("", Parsed::ProducerExpr(pexpr!(List)))));
+        assert_eq!(
+            parse("list pr|confirm smt|done"),
+            Ok((
+                "",
+                Parsed::ProducerExpr(pexpr!(List ["pr"] => [Confirm ["smt"]] => Done))
+            )),
+        );
+        assert_eq!(
+            parse("done 1 2"),
+            Ok((
+                "",
+                Parsed::ConsumerWithArgs(ConsumerWithArgs {
+                    consumer: Consumer::Done,
+                    args: vec![1, 2]
+                })
+            ))
         );
     }
 }
