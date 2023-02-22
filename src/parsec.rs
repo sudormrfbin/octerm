@@ -5,7 +5,7 @@ pub fn literal<'a>(lit: &'a str) -> impl Fn(&str) -> Result<(&str, &'a str), &st
         input
             .strip_prefix(lit)
             .map(|rem| (rem, lit))
-            .ok_or_else(|| "Could not parse literal")
+            .ok_or("Could not parse literal")
     }
 }
 
@@ -63,7 +63,7 @@ pub fn any<Output>(
         parsers
             .iter()
             .find_map(|p| p(input).ok())
-            .ok_or_else(|| "Did not match any parser")
+            .ok_or("Did not match any parser")
     }
 }
 
@@ -103,14 +103,14 @@ mod test {
 
     #[test]
     fn test_pred() {
-        let parse = pred(|ch| ch.is_digit(10));
+        let parse = pred(|ch| ch.is_ascii_digit());
         assert_eq!(parse("123"), Ok(("23", '1')));
         assert!(parse("a12").is_err());
     }
 
     #[test]
     fn test_many1() {
-        let parse = many1(pred(|ch| ch.is_digit(10)));
+        let parse = many1(pred(|ch| ch.is_ascii_digit()));
         assert_eq!(parse("123"), Ok(("", vec!['1', '2', '3'])));
         assert_eq!(parse("12q3"), Ok(("q3", vec!['1', '2'])));
         assert!(parse("q3").is_err());
@@ -118,7 +118,7 @@ mod test {
 
     #[test]
     fn test_many0() {
-        let parse = many0(pred(|ch| ch.is_digit(10)));
+        let parse = many0(pred(|ch| ch.is_ascii_digit()));
         assert_eq!(parse("123"), Ok(("", vec!['1', '2', '3'])));
         assert_eq!(parse("12q3"), Ok(("q3", vec!['1', '2'])));
         assert_eq!(parse("q3"), Ok(("q3", vec![])));

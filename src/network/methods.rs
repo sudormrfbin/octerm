@@ -305,7 +305,7 @@ pub async fn pr_timeline(
                         PullRequestReviewState::Other(s) => events::ReviewState::Other(s),
                     },
 
-                    body: review.body.is_empty().not().then(|| review.body),
+                    body: review.body.is_empty().not().then_some(review.body),
                 }
                 .with(actor!(review, author), review.created_at),
                 TimelineEvent::ReadyForReviewEvent(ready) => {

@@ -32,17 +32,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let cmd_result = match &cmds[..] {
                     [] => Ok(()),
                     [producer] if PRODUCERS.contains(producer) => {
-                        handle_producer(&tokenize(&producer), &notifications).await
+                        handle_producer(&tokenize(producer), &notifications).await
                     }
                     [consumer] if CONSUMERS.contains(consumer) => {
-                        handle_consumer(&tokenize(&consumer), &mut notifications, None).await
+                        handle_consumer(&tokenize(consumer), &mut notifications, None).await
                     }
                     [command] if COMMANDS.contains(command) => {
-                        handle_command(&tokenize(&command), &mut notifications).await
+                        handle_command(&tokenize(command), &mut notifications).await
                     }
                     [invalid] => Err(format!("Invalid command '{invalid}'")),
-                    [producer, adapters @ .., consumer] => {
-                        handle_producer(&tokenize(&producer), &notifications).await
+                    [producer, _adapters @ .., _consumer] => {
+                        handle_producer(&tokenize(producer), &notifications).await
                     }
                 };
 
@@ -57,10 +57,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // TODO: Change to hashmap?
-pub const PRODUCERS: &[&'static str] = &["list"];
-pub const CONSUMERS: &[&'static str] = &["open", "done"];
-pub const COMMANDS: &[&'static str] = &["reload"];
-pub const ADAPTERS: &[&'static str] = &[];
+pub const PRODUCERS: &[&str] = &["list"];
+pub const CONSUMERS: &[&str] = &["open", "done"];
+pub const COMMANDS: &[&str] = &["reload"];
+pub const ADAPTERS: &[&str] = &[];
 
 fn tokenize(cmd: &str) -> Vec<&str> {
     cmd.split_whitespace().collect()
@@ -68,7 +68,7 @@ fn tokenize(cmd: &str) -> Vec<&str> {
 
 async fn handle_producer(tokens: &[&str], notifications: &[Notification]) -> Result<(), String> {
     match tokens {
-        ["list" | "l", args @ ..] => list(&notifications, args).await,
+        ["list" | "l", args @ ..] => list(notifications, args).await,
         [] => Ok(()),
         _ => Err("Invalid command".to_string()),
     }
@@ -76,15 +76,15 @@ async fn handle_producer(tokens: &[&str], notifications: &[Notification]) -> Res
 
 async fn handle_consumer(
     tokens: &[&str],
-    mut notifications: &mut Vec<Notification>,
+    notifications: &mut Vec<Notification>,
     piped: Option<Vec<usize>>,
 ) -> Result<(), String> {
     match tokens {
-        ["open" | "o", args @ ..] => open(&mut notifications, args, piped).await,
+        ["open" | "o", args @ ..] => open(notifications, args, piped).await,
         ["done" | "d", args @ ..] => {
-            let result = done(&mut notifications, args, piped).await;
+            let result = done(notifications, args, piped).await;
             // Print the list again since done will change the indices
-            let _ = list(&notifications, &[]).await;
+            let _ = list(notifications, &[]).await;
             result
         }
         _ => Err("Invalid command".to_string()),
@@ -93,10 +93,10 @@ async fn handle_consumer(
 
 async fn handle_command(
     tokens: &[&str],
-    mut notifications: &mut Vec<Notification>,
+    notifications: &mut Vec<Notification>,
 ) -> Result<(), String> {
     match tokens {
-        ["reload" | "r"] => reload(&mut notifications).await,
+        ["reload" | "r"] => reload(notifications).await,
         _ => Err("Invalid command".to_string()),
     }
 }
@@ -205,14 +205,11 @@ pub mod consumers {
         network::methods::{mark_notification_as_read, open_notification_in_browser},
     };
 
-    pub async fn open(
-        notifications: &mut Vec<Notification>,
-        filter: &[usize],
-    ) -> Result<(), String> {
+    pub async fn open(notifications: &mut [Notification], filter: &[usize]) -> Result<(), String> {
         let futs = filter
             .iter()
             .map(|i| &notifications[*i])
-            .map(|notification| open_notification_in_browser(&notification));
+            .map(open_notification_in_browser);
         futures::future::join_all(futs)
             .await
             .into_iter()
@@ -234,7 +231,7 @@ pub mod consumers {
                 mark_notification_as_read(&octo, notification.inner.id).map_ok(|_| *i)
             });
         let marked = futures::future::join_all(futs).await;
-        let has_error = marked.iter().find(|m| m.is_err()).is_some();
+        let has_error = marked.iter().any(|m| m.is_err());
         let mut marked: Vec<usize> = marked.into_iter().filter_map(|m| m.ok()).collect();
         marked.sort();
 
@@ -292,5 +289,5 @@ pub fn print_error(msg: &str) {
 }
 
 fn true_count(bools: &[bool]) -> usize {
-    bools.into_iter().map(|b| *b as usize).sum()
+    bools.iter().map(|b| *b as usize).sum()
 }

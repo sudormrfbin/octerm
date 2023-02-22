@@ -170,8 +170,8 @@ pub enum IssueOrPullRequest {
 impl IssueOrPullRequest {
     pub fn title(&self) -> &str {
         match self {
-            IssueOrPullRequest::PullRequest { title, .. } => &title,
-            IssueOrPullRequest::Issue { title, .. } => &title,
+            IssueOrPullRequest::PullRequest { title, .. } => title,
+            IssueOrPullRequest::Issue { title, .. } => title,
         }
     }
 
