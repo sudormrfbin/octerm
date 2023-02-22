@@ -86,6 +86,20 @@ where
     }
 }
 
+/// Equivalent to any([p1, p2]), except that `or` can be used when
+/// p1 and p2 are different parsers that have the same output. `any`
+/// can only be used where p1 and p2 are the same parser (impl in
+/// return position gives an opaque type, and the array is typed with
+/// this opaque type making it impossible to use parsers returned by
+/// different combinators together).
+pub fn or<P1, P2, O>(p1: P1, p2: P2) -> impl Fn(&str) -> ParseResult<O>
+where
+    P1: Fn(&str) -> ParseResult<O>,
+    P2: Fn(&str) -> ParseResult<O>,
+{
+    move |input: &str| p1(input).or_else(|_| p2(input))
+}
+
 pub fn left<P, O1, O2>(parser: P) -> impl Fn(&str) -> ParseResult<O1>
 where
     P: Fn(&str) -> ParseResult<(O1, O2)>,
@@ -195,6 +209,13 @@ mod test {
         assert_eq!(parse("list  "), Ok(("", ("list", vec![' ', ' ']))));
         let parse = and(and(literal("list"), whitespace1()), literal("pr"));
         assert_eq!(parse("list pr"), Ok(("", (("list", vec![' ']), "pr"))));
+    }
+
+    #[test]
+    fn test_or() {
+        let parse = or(literal("list"), map(whitespace1(), |_| ""));
+        assert_eq!(parse("list"), Ok(("", "list")));
+        assert_eq!(parse("    "), Ok(("", "")));
     }
 
     #[test]
