@@ -371,41 +371,51 @@ mod test {
         test("open 1 ; done", Consumer::Open, &[1], "; done");
     }
 
-    macro_rules! prod {
-        ($name:ident) => {{
-            let arr: [&'static str; 0] = [];
-            prod!($name, arr)
-        }};
-        ($name:ident, $args:expr) => {
-            ProducerWithArgs {
-                producer: Producer::$name,
-                args: $args.iter().map(ToString::to_string).collect(),
-            }
+    macro_rules! pexpr {
+        (
+            $prod:ident $prod_args:expr
+        ) => {
+            pexpr!($prod $prod_args =>)
         };
-    }
 
-    macro_rules! adap {
-        ($name:ident) => {{
-            let arr: [&'static str; 0] = [];
-            adap!($name, arr)
-        }};
-        ($name:ident, $args:expr) => {
-            AdapterWithArgs {
-                adapter: Adapter::$name,
-                args: $args.iter().map(ToString::to_string).collect(),
-            }
+        (
+            $prod:ident $prod_args:expr =>
+            $([$adap:ident $adap_args:expr])*
+        ) => {
+            pexpr!($prod $prod_args => $([$adap $adap_args])* => None)
         };
-    }
 
-    macro_rules! cons {
-        ($name:ident) => {{
-            let arr: [usize; 0] = [];
-            cons!($name, arr)
-        }};
-        ($name:ident, $args:expr) => {
-            ConsumerWithArgs {
-                consumer: Consumer::$name,
-                args: $args.iter().copied().collect(),
+        (
+            $prod:ident $prod_args:expr =>
+            $([$adap:ident $adap_args:expr])* =>
+            // , between $cons and $cons_args to prevent recursion (Some
+            // gets recognized as ident and (ConsumerWithArgs {..}) gets
+            // recognized as expr without the ,).
+            $cons:ident, $cons_args:expr
+        ) => {
+            pexpr!($prod $prod_args => $([$adap $adap_args])* => Some(ConsumerWithArgs {
+                consumer: Consumer::$cons,
+                args: $cons_args.iter().copied().collect()
+            }))
+        };
+
+        (
+            $prod:ident $prod_args:expr =>
+            $([$adap:ident $adap_args:expr])* =>
+            $cons_expr:expr
+        ) => {
+            ProducerPipe {
+                producer: ProducerWithArgs {
+                    producer: Producer::$prod,
+                    args: $prod_args.iter().map(ToString::to_string).collect(),
+                },
+                adapters: vec![$(
+                    AdapterWithArgs {
+                        adapter: Adapter::$adap,
+                        args: $adap_args.iter().map(ToString::to_string).collect()
+                    },
+                )*],
+                consumer: $cons_expr,
             }
         };
     }
@@ -413,66 +423,69 @@ mod test {
     #[test]
     fn test_producer_expr() {
         let parse = producer_expr();
-        let test = |input, prod, adaps, cons| {
-            assert_eq!(
-                parse(input),
-                Ok((
-                    "",
-                    ProducerPipe {
-                        producer: prod,
-                        adapters: adaps,
-                        consumer: cons,
-                    }
-                ))
-            );
-        };
 
-        test("list", prod!(List), vec![], None);
+        // An empty [] confuses type inference so annotate the type and pass on to macro
+        let a0: [&'static str; 0] = []; // zero args
+        let ua0: [usize; 0] = []; // zero usize args
+
+        macro_rules! test {
+            ($input:literal, $pexp:expr, $msg:literal) => {
+                assert_eq!(parse($input), Ok(("", $pexp)), "{}: {}", $input, $msg)
+            };
+        }
+
         assert!(parse("lister").is_err());
-        test("list pr open", prod!(List, ["pr", "open"]), vec![], None);
-        test("list pr open ", prod!(List, ["pr", "open"]), vec![], None);
-        test("list|confirm", prod!(List), vec![adap!(Confirm)], None);
-        test(
+        test!("list", pexpr!(List a0), "bare producer");
+
+        test!(
+            "list pr open",
+            pexpr!(List ["pr", "open"]),
+            "producer with args"
+        );
+        test!(
+            "list pr open ",
+            pexpr!(List ["pr", "open"]),
+            "producer with args with trailing whitespace"
+        );
+        test!(
+            "list|confirm",
+            pexpr!(List a0 => [Confirm a0]),
+            "bare producer and bare adapter"
+        );
+        test!(
             "list pr|confirm",
-            prod!(List, ["pr"]),
-            vec![adap!(Confirm)],
-            None,
+            pexpr!(List ["pr"] => [Confirm a0]),
+            "producer with args and bare adapter"
         );
-        test(
+        test!(
             "list pr|confirm smt",
-            prod!(List, ["pr"]),
-            vec![adap!(Confirm, ["smt"])],
-            None,
+            pexpr!(List ["pr"] => [Confirm ["smt"]]),
+            "producer with args and adapter with args"
         );
-        test(
+        test!(
             "list|confirm smt",
-            prod!(List),
-            vec![adap!(Confirm, ["smt"])],
-            None,
+            pexpr!(List a0 => [Confirm ["smt"]]),
+            "bare producer and adapter with args"
         );
-        test(
+        test!(
             "list|confirm|confirm",
-            prod!(List),
-            vec![adap!(Confirm), adap!(Confirm)],
-            None,
+            pexpr!(List a0 => [Confirm a0] [Confirm a0]),
+            "bare producer and bare adapter and bare adapter"
         );
-        test(
+        test!(
             "list|confirm|done",
-            prod!(List),
-            vec![adap!(Confirm)],
-            Some(cons!(Done)),
+            pexpr!(List a0 => [Confirm a0] => Done, ua0),
+            "bare producer and bare adapter and bare consumer"
         );
-        test(
+        test!(
             "list|confirm smt|done",
-            prod!(List),
-            vec![adap!(Confirm, ["smt"])],
-            Some(cons!(Done)),
+            pexpr!(List a0 => [Confirm ["smt"]] => Done, ua0),
+            "bare producer and adapter with args and bare consumer"
         );
-        test(
+        test!(
             "list|confirm|confirm|done",
-            prod!(List),
-            vec![adap!(Confirm), adap!(Confirm)],
-            Some(cons!(Done)),
+            pexpr!(List a0 => [Confirm a0] [Confirm a0] => Done, ua0),
+            "bare producer and bare adapter*s* and bare consumer"
         );
     }
 }
