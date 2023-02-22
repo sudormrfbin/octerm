@@ -18,6 +18,13 @@ pub fn pred(cond: impl Fn(char) -> bool) -> impl Fn(&str) -> ParseResult<char> {
     }
 }
 
+pub fn peek(cond: impl Fn(char) -> bool) -> impl Fn(&str) -> ParseResult<char> {
+    move |input: &str| match input.chars().next().filter(|ch| cond(*ch)) {
+        Some(ch) => Ok((input, ch)),
+        None => Err("peek not matched"),
+    }
+}
+
 pub fn many1<Output>(
     parse: impl Fn(&str) -> ParseResult<Output>,
 ) -> impl Fn(&str) -> ParseResult<Vec<Output>> {
@@ -129,6 +136,13 @@ mod test {
     fn test_pred() {
         let parse = pred(|ch| ch.is_ascii_digit());
         assert_eq!(parse("123"), Ok(("23", '1')));
+        assert!(parse("a12").is_err());
+    }
+
+    #[test]
+    fn test_peek() {
+        let parse = peek(|ch| ch.is_ascii_digit());
+        assert_eq!(parse("123"), Ok(("123", '1')));
         assert!(parse("a12").is_err());
     }
 
