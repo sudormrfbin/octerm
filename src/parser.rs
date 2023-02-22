@@ -97,21 +97,20 @@ pub fn producer_expr() -> impl Fn(&str) -> ParseResult<ProducerExpr> {
     // TODO: Handle whitespace
     let piped_adapter = right(and(pipe(), adapter_with_args()));
     let piped_adapters = many0(piped_adapter);
-    let piped_consumer = right(and(pipe(), consumer_with_args()));
+    let piped_consumer = right(and(pipe(), consumer()));
 
     let producer_expr = and(
         and(producer_with_args(), piped_adapters),
         maybe(piped_consumer),
     );
     let producer_expr = eof(producer_expr);
-    map(
-        producer_expr,
-        |((prod_with_args, adap_with_args), cons_with_args)| ProducerExpr {
+    map(producer_expr, |((prod_with_args, adap_with_args), cons)| {
+        ProducerExpr {
             producer: prod_with_args,
             adapters: adap_with_args,
-            consumer: cons_with_args,
-        },
-    )
+            consumer: cons,
+        }
+    })
 }
 
 pub mod types {
@@ -235,7 +234,7 @@ pub mod types {
     pub struct ProducerExpr {
         pub producer: ProducerWithArgs,
         pub adapters: Vec<AdapterWithArgs>,
-        pub consumer: Option<ConsumerWithArgs>,
+        pub consumer: Option<Consumer>,
     }
 
     pub enum Parsed {
@@ -382,29 +381,15 @@ mod test {
             $prod:ident $prod_args:expr =>
             $([$adap:ident $adap_args:expr])*
         ) => {
-            pexpr!($prod $prod_args => $([$adap $adap_args])* => None)
+            pexpr!($prod $prod_args => $([$adap $adap_args])* =>)
         };
 
         (
             $prod:ident $prod_args:expr =>
             $([$adap:ident $adap_args:expr])* =>
-            // , between $cons and $cons_args to prevent recursion (Some
-            // gets recognized as ident and (ConsumerWithArgs {..}) gets
-            // recognized as expr without the ,).
-            $cons:ident, $cons_args:expr
+            $($cons:ident)?
         ) => {
-            pexpr!($prod $prod_args => $([$adap $adap_args])* => Some(ConsumerWithArgs {
-                consumer: Consumer::$cons,
-                args: $cons_args.iter().copied().collect()
-            }))
-        };
-
-        (
-            $prod:ident $prod_args:expr =>
-            $([$adap:ident $adap_args:expr])* =>
-            $cons_expr:expr
-        ) => {
-            ProducerPipe {
+            ProducerExpr {
                 producer: ProducerWithArgs {
                     producer: Producer::$prod,
                     args: $prod_args.iter().map(ToString::to_string).collect(),
@@ -415,9 +400,20 @@ mod test {
                         args: $adap_args.iter().map(ToString::to_string).collect()
                     },
                 )*],
-                consumer: $cons_expr,
+                consumer: pexpr!(@optional_conusmer $($cons)?),
             }
         };
+
+        (@optional_conusmer) => { None };
+        (@optional_conusmer $val:ident) => { Some(Consumer::$val) };
+
+        // (
+        //     $prod:ident $prod_args:expr =>
+        //     $([$adap:ident $adap_args:expr])* =>
+        //     $cons:ident
+        // ) => {
+        //     pexpr!($prod $prod_args => $([$adap $adap_args])* => Some(Consumer::$cons))
+        // };
     }
 
     #[test]
@@ -426,7 +422,6 @@ mod test {
 
         // An empty [] confuses type inference so annotate the type and pass on to macro
         let a0: [&'static str; 0] = []; // zero args
-        let ua0: [usize; 0] = []; // zero usize args
 
         macro_rules! test {
             ($input:literal, $pexp:expr, $msg:literal) => {
@@ -474,17 +469,17 @@ mod test {
         );
         test!(
             "list|confirm|done",
-            pexpr!(List a0 => [Confirm a0] => Done, ua0),
+            pexpr!(List a0 => [Confirm a0] => Done),
             "bare producer and bare adapter and bare consumer"
         );
         test!(
             "list|confirm smt|done",
-            pexpr!(List a0 => [Confirm ["smt"]] => Done, ua0),
+            pexpr!(List a0 => [Confirm ["smt"]] => Done),
             "bare producer and adapter with args and bare consumer"
         );
         test!(
             "list|confirm|confirm|done",
-            pexpr!(List a0 => [Confirm a0] [Confirm a0] => Done, ua0),
+            pexpr!(List a0 => [Confirm a0] [Confirm a0] => Done),
             "bare producer and bare adapter*s* and bare consumer"
         );
     }
