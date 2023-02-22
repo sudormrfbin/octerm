@@ -49,11 +49,11 @@ pub fn many0<Output>(
 }
 
 pub fn whitespace1() -> impl Fn(&str) -> Result<(&str, Vec<char>), &str> {
-    move |input: &str| many1(pred(|ch| ch.is_whitespace()))(input)
+    many1(pred(|ch| ch.is_whitespace()))
 }
 
 pub fn whitespace0() -> impl Fn(&str) -> Result<(&str, Vec<char>), &str> {
-    move |input: &str| many0(pred(|ch| ch.is_whitespace()))(input)
+    many0(pred(|ch| ch.is_whitespace()))
 }
 
 pub fn any<Output>(

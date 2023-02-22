@@ -11,10 +11,8 @@ pub fn word() -> impl Fn(&str) -> Result<(&str, String), &str> {
 }
 
 pub fn args() -> impl Fn(&str) -> Result<(&str, Vec<String>), &str> {
-    |input: &str| {
-        let arg = left(and(word(), whitespace0()));
-        many0(arg)(input)
-    }
+    let arg = left(and(word(), whitespace0()));
+    many0(arg)
 }
 
 pub fn uint() -> impl Fn(&str) -> Result<(&str, usize), &str> {
@@ -24,10 +22,8 @@ pub fn uint() -> impl Fn(&str) -> Result<(&str, usize), &str> {
 }
 
 pub fn uint_args() -> impl Fn(&str) -> Result<(&str, Vec<usize>), &str> {
-    |input: &str| {
-        let arg = left(and(uint(), whitespace0()));
-        many0(arg)(input)
-    }
+    let arg = left(and(uint(), whitespace0()));
+    many0(arg)
 }
 
 /// Parses any of the given literals into an Enum.
