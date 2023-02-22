@@ -8,31 +8,29 @@ use self::types::{
     ProducerWithArgs,
 };
 
-pub fn word() -> impl Fn(&str) -> ParseResult<String> {
+fn word() -> impl Fn(&str) -> ParseResult<String> {
     let parser = many1(pred(|ch| ch.is_alphanumeric()));
     map(parser, |chars| chars.iter().collect())
 }
 
-pub fn args() -> impl Fn(&str) -> ParseResult<Vec<String>> {
+fn args() -> impl Fn(&str) -> ParseResult<Vec<String>> {
     let arg = left(and(word(), whitespace0()));
     many0(arg)
 }
 
-pub fn uint() -> impl Fn(&str) -> ParseResult<usize> {
+fn uint() -> impl Fn(&str) -> ParseResult<usize> {
     let parser = many1(pred(|ch| ch.is_ascii_digit()));
     let chars_to_usize = |chars: Vec<char>| chars.iter().collect::<String>().parse().unwrap();
     map(parser, chars_to_usize)
 }
 
-pub fn uint_args() -> impl Fn(&str) -> ParseResult<Vec<usize>> {
+fn uint_args() -> impl Fn(&str) -> ParseResult<Vec<usize>> {
     let arg = left(and(uint(), whitespace0()));
     many0(arg)
 }
 
 /// Parses any of the given literals into an Enum.
-pub fn literal_to_enum<E, const N: usize>(
-    lits: [&'static str; N],
-) -> impl Fn(&str) -> ParseResult<E>
+fn literal_to_enum<E, const N: usize>(lits: [&'static str; N]) -> impl Fn(&str) -> ParseResult<E>
 where
     E: TryFrom<&'static str, Error = &'static str>,
 {
@@ -43,27 +41,27 @@ where
     }
 }
 
-pub fn command() -> impl Fn(&str) -> ParseResult<Command> {
+fn command() -> impl Fn(&str) -> ParseResult<Command> {
     literal_to_enum(Command::all())
 }
 
-pub fn producer() -> impl Fn(&str) -> ParseResult<Producer> {
+fn producer() -> impl Fn(&str) -> ParseResult<Producer> {
     literal_to_enum(Producer::all())
 }
 
-pub fn adapter() -> impl Fn(&str) -> ParseResult<Adapter> {
+fn adapter() -> impl Fn(&str) -> ParseResult<Adapter> {
     literal_to_enum(Adapter::all())
 }
 
-pub fn consumer() -> impl Fn(&str) -> ParseResult<Consumer> {
+fn consumer() -> impl Fn(&str) -> ParseResult<Consumer> {
     literal_to_enum(Consumer::all())
 }
 
-pub fn pipe() -> impl Fn(&str) -> ParseResult<()> {
+fn pipe() -> impl Fn(&str) -> ParseResult<()> {
     map(literal("|"), |_| ())
 }
 
-pub fn producer_with_args() -> impl Fn(&str) -> ParseResult<ProducerWithArgs> {
+fn producer_with_args() -> impl Fn(&str) -> ParseResult<ProducerWithArgs> {
     let maybe_args = maybe(right(and(whitespace1(), args())));
     map(and(producer(), maybe_args), |(producer, args)| {
         ProducerWithArgs {
@@ -73,7 +71,7 @@ pub fn producer_with_args() -> impl Fn(&str) -> ParseResult<ProducerWithArgs> {
     })
 }
 
-pub fn consumer_with_args() -> impl Fn(&str) -> ParseResult<ConsumerWithArgs> {
+fn consumer_with_args() -> impl Fn(&str) -> ParseResult<ConsumerWithArgs> {
     let maybe_args = maybe(right(and(whitespace1(), uint_args())));
     map(and(consumer(), maybe_args), |(consumer, args)| {
         ConsumerWithArgs {
@@ -83,7 +81,7 @@ pub fn consumer_with_args() -> impl Fn(&str) -> ParseResult<ConsumerWithArgs> {
     })
 }
 
-pub fn adapter_with_args() -> impl Fn(&str) -> ParseResult<AdapterWithArgs> {
+fn adapter_with_args() -> impl Fn(&str) -> ParseResult<AdapterWithArgs> {
     let maybe_args = maybe(right(and(whitespace1(), args())));
     map(and(adapter(), maybe_args), |(adapter, args)| {
         AdapterWithArgs {
@@ -93,7 +91,7 @@ pub fn adapter_with_args() -> impl Fn(&str) -> ParseResult<AdapterWithArgs> {
     })
 }
 
-pub fn producer_expr() -> impl Fn(&str) -> ParseResult<ProducerExpr> {
+fn producer_expr() -> impl Fn(&str) -> ParseResult<ProducerExpr> {
     // TODO: Handle whitespace
     let piped_adapter = right(and(pipe(), adapter_with_args()));
     let piped_adapters = many0(piped_adapter);
@@ -256,7 +254,6 @@ pub mod types {
 }
 
 #[cfg(test)]
-
 mod test {
     use super::*;
 
