@@ -114,11 +114,9 @@ fn producer_expr() -> impl Fn(&str) -> ParseResult<ProducerExpr> {
 }
 
 pub fn parser() -> impl Fn(&str) -> ParseResult<Parsed> {
-    let command = map(eof(command()), |cmd| Parsed::Command(cmd));
-    let prod_expr = map(producer_expr(), |expr| Parsed::ProducerExpr(expr));
-    let cons_with_args = map(eof(consumer_with_args()), |cons| {
-        Parsed::ConsumerWithArgs(cons)
-    });
+    let command = map(eof(command()), Parsed::Command);
+    let prod_expr = map(producer_expr(), Parsed::ProducerExpr);
+    let cons_with_args = map(eof(consumer_with_args()), Parsed::ConsumerWithArgs);
 
     or(or(command, prod_expr), cons_with_args)
 }
@@ -236,7 +234,7 @@ mod test {
                     next_input,
                     ConsumerWithArgs {
                         consumer: cons,
-                        args: args.iter().copied().collect(),
+                        args: args.to_vec(),
                     }
                 ))
             );
