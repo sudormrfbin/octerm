@@ -134,6 +134,19 @@ where
     }
 }
 
+pub fn eof<P, O>(parser: P) -> impl Fn(&str) -> ParseResult<O>
+where
+    P: Fn(&str) -> ParseResult<O>,
+{
+    move |input: &str| {
+        let (next_input, output) = parser(input)?;
+        match next_input {
+            "" => Ok((next_input, output)),
+            _ => Err("input not fully consumed"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -243,5 +256,12 @@ mod test {
         let parse = maybe(literal("wow"));
         assert_eq!(parse("wow"), Ok(("", Some("wow"))));
         assert_eq!(parse("ow"), Ok(("ow", None)));
+    }
+
+    #[test]
+    fn test_eof() {
+        let parse = eof(literal("list"));
+        assert_eq!(parse("list"), Ok(("", "list")));
+        assert!(parse("listed").is_err())
     }
 }
