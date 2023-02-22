@@ -373,21 +373,8 @@ mod test {
     macro_rules! pexpr {
         (
             $prod:ident $prod_args:expr
-        ) => {
-            pexpr!($prod $prod_args =>)
-        };
-
-        (
-            $prod:ident $prod_args:expr =>
-            $([$adap:ident $adap_args:expr])*
-        ) => {
-            pexpr!($prod $prod_args => $([$adap $adap_args])* =>)
-        };
-
-        (
-            $prod:ident $prod_args:expr =>
-            $([$adap:ident $adap_args:expr])* =>
-            $($cons:ident)?
+            $(=> [$adap:ident $adap_args:expr])*
+            $(=> $cons:ident)?
         ) => {
             ProducerExpr {
                 producer: ProducerWithArgs {
@@ -406,14 +393,6 @@ mod test {
 
         (@optional_conusmer) => { None };
         (@optional_conusmer $val:ident) => { Some(Consumer::$val) };
-
-        // (
-        //     $prod:ident $prod_args:expr =>
-        //     $([$adap:ident $adap_args:expr])* =>
-        //     $cons:ident
-        // ) => {
-        //     pexpr!($prod $prod_args => $([$adap $adap_args])* => Some(Consumer::$cons))
-        // };
     }
 
     #[test]
@@ -464,7 +443,7 @@ mod test {
         );
         test!(
             "list|confirm|confirm",
-            pexpr!(List a0 => [Confirm a0] [Confirm a0]),
+            pexpr!(List a0 => [Confirm a0] => [Confirm a0]),
             "bare producer and bare adapter and bare adapter"
         );
         test!(
@@ -479,7 +458,7 @@ mod test {
         );
         test!(
             "list|confirm|confirm|done",
-            pexpr!(List a0 => [Confirm a0] [Confirm a0] => Done),
+            pexpr!(List a0 => [Confirm a0] => [Confirm a0] => Done),
             "bare producer and bare adapter*s* and bare consumer"
         );
     }
