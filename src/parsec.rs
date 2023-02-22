@@ -86,6 +86,13 @@ where
     map(parser, |(o1, _)| o1)
 }
 
+pub fn right<P, O1, O2>(parser: P) -> impl Fn(&str) -> Result<(&str, O2), &str>
+where
+    P: Fn(&str) -> Result<(&str, (O1, O2)), &str>,
+{
+    map(parser, |(_, o2)| o2)
+}
+
 pub fn map<P, O1, O2>(parser: P, f: impl Fn(O1) -> O2) -> impl Fn(&str) -> Result<(&str, O2), &str>
 where
     P: Fn(&str) -> Result<(&str, O1), &str>,
@@ -171,6 +178,13 @@ mod test {
         let list_and_whitespace = and(literal("list"), whitespace1());
         let parse = and(left(list_and_whitespace), literal("pr"));
         assert_eq!(parse("list pr"), Ok(("", ("list", "pr"))));
+    }
+
+    #[test]
+    fn test_right() {
+        let pipe_and_sort = and(literal("|"), literal("sort"));
+        let parse = and(right(pipe_and_sort), literal("|open"));
+        assert_eq!(parse("|sort|open"), Ok(("", ("sort", "|open"))));
     }
 
     #[test]
