@@ -6,10 +6,8 @@ use crate::parsec::*;
 use self::types::{Adapter, Command, Consumer, Producer};
 
 pub fn word() -> impl Fn(&str) -> Result<(&str, String), &str> {
-    |input: &str| {
-        let (rem, chars) = many1(pred(|ch| ch.is_alphanumeric()))(input)?;
-        Ok((rem, chars.iter().collect()))
-    }
+    let parser = many1(pred(|ch| ch.is_alphanumeric()));
+    map(parser, |chars| chars.iter().collect())
 }
 
 pub fn args() -> impl Fn(&str) -> Result<(&str, Vec<String>), &str> {
@@ -20,15 +18,9 @@ pub fn args() -> impl Fn(&str) -> Result<(&str, Vec<String>), &str> {
 }
 
 pub fn uint() -> impl Fn(&str) -> Result<(&str, usize), &str> {
-    |input: &str| {
-        let (rem, chars) = many1(pred(|ch| ch.is_ascii_digit()))(input)?;
-        let uint = chars
-            .iter()
-            .collect::<String>()
-            .parse()
-            .map_err(|_| "Could not parse as unsigned integer")?;
-        Ok((rem, uint))
-    }
+    let parser = many1(pred(|ch| ch.is_ascii_digit()));
+    let chars_to_usize = |chars: Vec<char>| chars.iter().collect::<String>().parse().unwrap();
+    map(parser, chars_to_usize)
 }
 
 pub fn uint_args() -> impl Fn(&str) -> Result<(&str, Vec<usize>), &str> {

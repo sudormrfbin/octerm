@@ -83,9 +83,16 @@ pub fn left<P, O1, O2>(parser: P) -> impl Fn(&str) -> Result<(&str, O1), &str>
 where
     P: Fn(&str) -> Result<(&str, (O1, O2)), &str>,
 {
+    map(parser, |(o1, _)| o1)
+}
+
+pub fn map<P, O1, O2>(parser: P, f: impl Fn(O1) -> O2) -> impl Fn(&str) -> Result<(&str, O2), &str>
+where
+    P: Fn(&str) -> Result<(&str, O1), &str>,
+{
     move |input: &str| {
-        let (input, (o1, _)) = parser(input)?;
-        Ok((input, o1))
+        let (rem, o1) = parser(input)?;
+        Ok((rem, f(o1)))
     }
 }
 
@@ -164,5 +171,11 @@ mod test {
         let list_and_whitespace = and(literal("list"), whitespace1());
         let parse = and(left(list_and_whitespace), literal("pr"));
         assert_eq!(parse("list pr"), Ok(("", ("list", "pr"))));
+    }
+
+    #[test]
+    fn test_map() {
+        let parse = map(whitespace1(), |v| v.len());
+        assert_eq!(parse("   "), Ok(("", 3)));
     }
 }
