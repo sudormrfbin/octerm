@@ -372,24 +372,27 @@ mod test {
 
     macro_rules! pexpr {
         (
-            $prod:ident $prod_args:expr
-            $(=> [$adap:ident $adap_args:expr])*
+            $prod:ident $($prod_args:expr)?
+            $(=> [$adap:ident $($adap_args:expr)?])*
             $(=> $cons:ident)?
         ) => {
             ProducerExpr {
                 producer: ProducerWithArgs {
                     producer: Producer::$prod,
-                    args: $prod_args.iter().map(ToString::to_string).collect(),
+                    args: pexpr!(@maybe_args $($prod_args)?),
                 },
                 adapters: vec![$(
                     AdapterWithArgs {
                         adapter: Adapter::$adap,
-                        args: $adap_args.iter().map(ToString::to_string).collect()
+                        args: pexpr!(@maybe_args $($adap_args)?),
                     },
                 )*],
                 consumer: pexpr!(@optional_conusmer $($cons)?),
             }
         };
+
+        (@maybe_args) => { vec![] };
+        (@maybe_args $args:expr) => { $args.iter().map(ToString::to_string).collect() };
 
         (@optional_conusmer) => { None };
         (@optional_conusmer $val:ident) => { Some(Consumer::$val) };
@@ -399,9 +402,6 @@ mod test {
     fn test_producer_expr() {
         let parse = producer_expr();
 
-        // An empty [] confuses type inference so annotate the type and pass on to macro
-        let a0: [&'static str; 0] = []; // zero args
-
         macro_rules! test {
             ($input:literal, $pexp:expr, $msg:literal) => {
                 assert_eq!(parse($input), Ok(("", $pexp)), "{}: {}", $input, $msg)
@@ -409,7 +409,7 @@ mod test {
         }
 
         assert!(parse("lister").is_err());
-        test!("list", pexpr!(List a0), "bare producer");
+        test!("list", pexpr!(List), "bare producer");
 
         test!(
             "list pr open",
@@ -423,12 +423,12 @@ mod test {
         );
         test!(
             "list|confirm",
-            pexpr!(List a0 => [Confirm a0]),
+            pexpr!(List => [Confirm]),
             "bare producer and bare adapter"
         );
         test!(
             "list pr|confirm",
-            pexpr!(List ["pr"] => [Confirm a0]),
+            pexpr!(List ["pr"] => [Confirm]),
             "producer with args and bare adapter"
         );
         test!(
@@ -438,27 +438,27 @@ mod test {
         );
         test!(
             "list|confirm smt",
-            pexpr!(List a0 => [Confirm ["smt"]]),
+            pexpr!(List => [Confirm ["smt"]]),
             "bare producer and adapter with args"
         );
         test!(
             "list|confirm|confirm",
-            pexpr!(List a0 => [Confirm a0] => [Confirm a0]),
+            pexpr!(List => [Confirm] => [Confirm]),
             "bare producer and bare adapter and bare adapter"
         );
         test!(
             "list|confirm|done",
-            pexpr!(List a0 => [Confirm a0] => Done),
+            pexpr!(List => [Confirm] => Done),
             "bare producer and bare adapter and bare consumer"
         );
         test!(
             "list|confirm smt|done",
-            pexpr!(List a0 => [Confirm ["smt"]] => Done),
+            pexpr!(List => [Confirm ["smt"]] => Done),
             "bare producer and adapter with args and bare consumer"
         );
         test!(
             "list|confirm|confirm|done",
-            pexpr!(List a0 => [Confirm a0] => [Confirm a0] => Done),
+            pexpr!(List => [Confirm] => [Confirm] => Done),
             "bare producer and bare adapter*s* and bare consumer"
         );
     }
