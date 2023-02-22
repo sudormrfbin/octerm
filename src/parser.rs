@@ -4,7 +4,7 @@
 use crate::parsec::*;
 
 use self::types::{
-    Adapter, AdapterWithArgs, Command, Consumer, ConsumerWithArgs, Producer, ProducerPipe,
+    Adapter, AdapterWithArgs, Command, Consumer, ConsumerWithArgs, Producer, ProducerExpr,
     ProducerWithArgs,
 };
 
@@ -93,7 +93,7 @@ pub fn adapter_with_args() -> impl Fn(&str) -> ParseResult<AdapterWithArgs> {
     })
 }
 
-pub fn producer_expr() -> impl Fn(&str) -> ParseResult<ProducerPipe> {
+pub fn producer_expr() -> impl Fn(&str) -> ParseResult<ProducerExpr> {
     // TODO: Handle whitespace
     let piped_adapter = right(and(pipe(), adapter_with_args()));
     let piped_adapters = many0(piped_adapter);
@@ -106,7 +106,7 @@ pub fn producer_expr() -> impl Fn(&str) -> ParseResult<ProducerPipe> {
     let producer_expr = eof(producer_expr);
     map(
         producer_expr,
-        |((prod_with_args, adap_with_args), cons_with_args)| ProducerPipe {
+        |((prod_with_args, adap_with_args), cons_with_args)| ProducerExpr {
             producer: prod_with_args,
             adapters: adap_with_args,
             consumer: cons_with_args,
@@ -232,7 +232,7 @@ pub mod types {
     }
 
     #[derive(Debug, PartialEq)]
-    pub struct ProducerPipe {
+    pub struct ProducerExpr {
         pub producer: ProducerWithArgs,
         pub adapters: Vec<AdapterWithArgs>,
         pub consumer: Option<ConsumerWithArgs>,
@@ -241,7 +241,7 @@ pub mod types {
     pub enum Parsed {
         Command(Command),
         ProducerWithArgs(ProducerWithArgs),
-        ProducerPipe(ProducerPipe),
+        ProducerPipe(ProducerExpr),
         ConsumerWithArgs(ConsumerWithArgs),
     }
 }
