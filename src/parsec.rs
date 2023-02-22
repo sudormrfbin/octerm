@@ -103,6 +103,16 @@ where
     }
 }
 
+pub fn maybe<P, O>(parser: P) -> impl Fn(&str) -> Result<(&str, Option<O>), &str>
+where
+    P: Fn(&str) -> Result<(&str, O), &str>,
+{
+    move |input: &str| match parser(input) {
+        Ok((next_input, output)) => Ok((next_input, Some(output))),
+        Err(_) => Ok((input, None)),
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -191,5 +201,12 @@ mod test {
     fn test_map() {
         let parse = map(whitespace1(), |v| v.len());
         assert_eq!(parse("   "), Ok(("", 3)));
+    }
+
+    #[test]
+    fn test_maybe() {
+        let parse = maybe(literal("wow"));
+        assert_eq!(parse("wow"), Ok(("", Some("wow"))));
+        assert_eq!(parse("ow"), Ok(("ow", None)));
     }
 }
