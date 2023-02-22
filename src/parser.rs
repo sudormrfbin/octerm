@@ -93,6 +93,25 @@ pub fn adapter_with_args() -> impl Fn(&str) -> ParseResult<AdapterWithArgs> {
     })
 }
 
+pub fn producer_expr() -> impl Fn(&str) -> ParseResult<ProducerPipe> {
+    // TODO: Handle whitespace
+    let piped_adapter = right(and(pipe(), adapter_with_args()));
+    let piped_adapters = many0(piped_adapter);
+    let piped_consumer = right(and(pipe(), consumer_with_args()));
+
+    let producer_pipe_expr = and(
+        and(producer_with_args(), piped_adapters),
+        maybe(piped_consumer),
+    );
+    map(
+        producer_pipe_expr,
+        |((prod_with_args, adap_with_args), cons_with_args)| ProducerPipe {
+            producer: prod_with_args,
+            adapters: adap_with_args,
+            consumer: cons_with_args,
+        },
+    )
+}
 
 pub mod types {
     #[derive(Debug, PartialEq)]
@@ -144,11 +163,13 @@ pub mod types {
     // ------------------------------------------------------------------------
 
     #[derive(Debug, PartialEq)]
-    pub enum Adapter {}
+    pub enum Adapter {
+        Confirm,
+    }
 
     impl Adapter {
-        pub const fn all() -> [&'static str; 0] {
-            []
+        pub const fn all() -> [&'static str; 1] {
+            ["confirm"]
         }
     }
 
@@ -157,6 +178,7 @@ pub mod types {
 
         fn try_from(value: &str) -> Result<Self, Self::Error> {
             match value {
+                "confirm" => Ok(Self::Confirm),
                 _ => Err("not an adapter"),
             }
         }
@@ -187,7 +209,9 @@ pub mod types {
             }
         }
     }
+
     // ------------------------------------------------------------------------
+
     #[derive(Debug, PartialEq)]
     pub struct ProducerWithArgs {
         pub producer: Producer,
@@ -344,5 +368,109 @@ mod test {
         test("done", Consumer::Done, &[], "");
         // Fake syntax
         test("open 1 ; done", Consumer::Open, &[1], "; done");
+    }
+
+    macro_rules! prod {
+        ($name:ident) => {{
+            let arr: [&'static str; 0] = [];
+            prod!($name, arr)
+        }};
+        ($name:ident, $args:expr) => {
+            ProducerWithArgs {
+                producer: Producer::$name,
+                args: $args.iter().map(ToString::to_string).collect(),
+            }
+        };
+    }
+
+    macro_rules! adap {
+        ($name:ident) => {{
+            let arr: [&'static str; 0] = [];
+            adap!($name, arr)
+        }};
+        ($name:ident, $args:expr) => {
+            AdapterWithArgs {
+                adapter: Adapter::$name,
+                args: $args.iter().map(ToString::to_string).collect(),
+            }
+        };
+    }
+
+    macro_rules! cons {
+        ($name:ident) => {{
+            let arr: [usize; 0] = [];
+            cons!($name, arr)
+        }};
+        ($name:ident, $args:expr) => {
+            ConsumerWithArgs {
+                consumer: Consumer::$name,
+                args: $args.iter().copied().collect(),
+            }
+        };
+    }
+
+    #[test]
+    fn test_producer_expr() {
+        let parse = producer_expr();
+        let test = |input, prod, adaps, cons| {
+            assert_eq!(
+                parse(input),
+                Ok((
+                    "",
+                    ProducerPipe {
+                        producer: prod,
+                        adapters: adaps,
+                        consumer: cons,
+                    }
+                ))
+            );
+        };
+
+        test("list", prod!(List), vec![], None);
+        test("list pr open", prod!(List, ["pr", "open"]), vec![], None);
+        test("list pr open ", prod!(List, ["pr", "open"]), vec![], None);
+        test("list|confirm", prod!(List), vec![adap!(Confirm)], None);
+        test(
+            "list pr|confirm",
+            prod!(List, ["pr"]),
+            vec![adap!(Confirm)],
+            None,
+        );
+        test(
+            "list pr|confirm smt",
+            prod!(List, ["pr"]),
+            vec![adap!(Confirm, ["smt"])],
+            None,
+        );
+        test(
+            "list|confirm smt",
+            prod!(List),
+            vec![adap!(Confirm, ["smt"])],
+            None,
+        );
+        test(
+            "list|confirm|confirm",
+            prod!(List),
+            vec![adap!(Confirm), adap!(Confirm)],
+            None,
+        );
+        test(
+            "list|confirm|done",
+            prod!(List),
+            vec![adap!(Confirm)],
+            Some(cons!(Done)),
+        );
+        test(
+            "list|confirm smt|done",
+            prod!(List),
+            vec![adap!(Confirm, ["smt"])],
+            Some(cons!(Done)),
+        );
+        test(
+            "list|confirm|confirm|done",
+            prod!(List),
+            vec![adap!(Confirm), adap!(Confirm)],
+            Some(cons!(Done)),
+        );
     }
 }
