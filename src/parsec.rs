@@ -1,6 +1,8 @@
 //! Parser combinators used to parse the custom command line syntax.
 
-pub fn literal<'a>(lit: &'a str) -> impl Fn(&str) -> Result<(&str, &'a str), &str> {
+pub type ParseResult<'inp, Output> = Result<(&'inp str, Output), &'static str>;
+
+pub fn literal<'a>(lit: &'a str) -> impl Fn(&str) -> ParseResult<&'a str> {
     move |input: &str| {
         input
             .strip_prefix(lit)
@@ -9,7 +11,7 @@ pub fn literal<'a>(lit: &'a str) -> impl Fn(&str) -> Result<(&str, &'a str), &st
     }
 }
 
-pub fn pred(cond: impl Fn(char) -> bool) -> impl Fn(&str) -> Result<(&str, char), &str> {
+pub fn pred(cond: impl Fn(char) -> bool) -> impl Fn(&str) -> ParseResult<char> {
     move |input: &str| match input.chars().next().filter(|ch| cond(*ch)) {
         Some(ch) => Ok((input.strip_prefix(ch).unwrap(), ch)),
         None => Err("predicate not matched"),
@@ -17,8 +19,8 @@ pub fn pred(cond: impl Fn(char) -> bool) -> impl Fn(&str) -> Result<(&str, char)
 }
 
 pub fn many1<Output>(
-    parse: impl Fn(&str) -> Result<(&str, Output), &str>,
-) -> impl Fn(&str) -> Result<(&str, Vec<Output>), &str> {
+    parse: impl Fn(&str) -> ParseResult<Output>,
+) -> impl Fn(&str) -> ParseResult<Vec<Output>> {
     move |input: &str| {
         let mut output = Vec::new();
         let (mut input, out) = parse(input)?;
@@ -33,9 +35,7 @@ pub fn many1<Output>(
     }
 }
 
-pub fn many0<Output>(
-    parse: impl Fn(&str) -> Result<(&str, Output), &str>,
-) -> impl Fn(&str) -> Result<(&str, Vec<Output>), &str> {
+pub fn many0<O>(parse: impl Fn(&str) -> ParseResult<O>) -> impl Fn(&str) -> ParseResult<Vec<O>> {
     move |mut input: &str| {
         let mut output = Vec::new();
 
@@ -48,17 +48,17 @@ pub fn many0<Output>(
     }
 }
 
-pub fn whitespace1() -> impl Fn(&str) -> Result<(&str, Vec<char>), &str> {
+pub fn whitespace1() -> impl Fn(&str) -> ParseResult<Vec<char>> {
     many1(pred(|ch| ch.is_whitespace()))
 }
 
-pub fn whitespace0() -> impl Fn(&str) -> Result<(&str, Vec<char>), &str> {
+pub fn whitespace0() -> impl Fn(&str) -> ParseResult<Vec<char>> {
     many0(pred(|ch| ch.is_whitespace()))
 }
 
 pub fn any<Output>(
-    parsers: &[impl Fn(&str) -> Result<(&str, Output), &str>],
-) -> impl Fn(&str) -> Result<(&str, Output), &str> + '_ {
+    parsers: &[impl Fn(&str) -> ParseResult<Output>],
+) -> impl Fn(&str) -> ParseResult<Output> + '_ {
     move |input: &str| {
         parsers
             .iter()
@@ -67,10 +67,10 @@ pub fn any<Output>(
     }
 }
 
-pub fn and<P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Fn(&str) -> Result<(&str, (O1, O2)), &str>
+pub fn and<P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Fn(&str) -> ParseResult<(O1, O2)>
 where
-    P1: Fn(&str) -> Result<(&str, O1), &str>,
-    P2: Fn(&str) -> Result<(&str, O2), &str>,
+    P1: Fn(&str) -> ParseResult<O1>,
+    P2: Fn(&str) -> ParseResult<O2>,
 {
     move |input: &str| {
         let (input, o1) = p1(input)?;
@@ -79,23 +79,23 @@ where
     }
 }
 
-pub fn left<P, O1, O2>(parser: P) -> impl Fn(&str) -> Result<(&str, O1), &str>
+pub fn left<P, O1, O2>(parser: P) -> impl Fn(&str) -> ParseResult<O1>
 where
-    P: Fn(&str) -> Result<(&str, (O1, O2)), &str>,
+    P: Fn(&str) -> ParseResult<(O1, O2)>,
 {
     map(parser, |(o1, _)| o1)
 }
 
-pub fn right<P, O1, O2>(parser: P) -> impl Fn(&str) -> Result<(&str, O2), &str>
+pub fn right<P, O1, O2>(parser: P) -> impl Fn(&str) -> ParseResult<O2>
 where
-    P: Fn(&str) -> Result<(&str, (O1, O2)), &str>,
+    P: Fn(&str) -> ParseResult<(O1, O2)>,
 {
     map(parser, |(_, o2)| o2)
 }
 
-pub fn map<P, O1, O2>(parser: P, f: impl Fn(O1) -> O2) -> impl Fn(&str) -> Result<(&str, O2), &str>
+pub fn map<P, O1, O2>(parser: P, f: impl Fn(O1) -> O2) -> impl Fn(&str) -> ParseResult<O2>
 where
-    P: Fn(&str) -> Result<(&str, O1), &str>,
+    P: Fn(&str) -> ParseResult<O1>,
 {
     move |input: &str| {
         let (rem, o1) = parser(input)?;
@@ -103,9 +103,9 @@ where
     }
 }
 
-pub fn maybe<P, O>(parser: P) -> impl Fn(&str) -> Result<(&str, Option<O>), &str>
+pub fn maybe<P, O>(parser: P) -> impl Fn(&str) -> ParseResult<Option<O>>
 where
-    P: Fn(&str) -> Result<(&str, O), &str>,
+    P: Fn(&str) -> ParseResult<O>,
 {
     move |input: &str| match parser(input) {
         Ok((next_input, output)) => Ok((next_input, Some(output))),

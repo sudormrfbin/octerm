@@ -5,23 +5,23 @@ use crate::parsec::*;
 
 use self::types::{Adapter, Command, Consumer, Producer};
 
-pub fn word() -> impl Fn(&str) -> Result<(&str, String), &str> {
+pub fn word() -> impl Fn(&str) -> ParseResult<String> {
     let parser = many1(pred(|ch| ch.is_alphanumeric()));
     map(parser, |chars| chars.iter().collect())
 }
 
-pub fn args() -> impl Fn(&str) -> Result<(&str, Vec<String>), &str> {
+pub fn args() -> impl Fn(&str) -> ParseResult<Vec<String>> {
     let arg = left(and(word(), whitespace0()));
     many0(arg)
 }
 
-pub fn uint() -> impl Fn(&str) -> Result<(&str, usize), &str> {
+pub fn uint() -> impl Fn(&str) -> ParseResult<usize> {
     let parser = many1(pred(|ch| ch.is_ascii_digit()));
     let chars_to_usize = |chars: Vec<char>| chars.iter().collect::<String>().parse().unwrap();
     map(parser, chars_to_usize)
 }
 
-pub fn uint_args() -> impl Fn(&str) -> Result<(&str, Vec<usize>), &str> {
+pub fn uint_args() -> impl Fn(&str) -> ParseResult<Vec<usize>> {
     let arg = left(and(uint(), whitespace0()));
     many0(arg)
 }
@@ -29,7 +29,7 @@ pub fn uint_args() -> impl Fn(&str) -> Result<(&str, Vec<usize>), &str> {
 /// Parses any of the given literals into an Enum.
 pub fn literal_to_enum<E, const N: usize>(
     lits: [&'static str; N],
-) -> impl Fn(&str) -> Result<(&str, E), &str>
+) -> impl Fn(&str) -> ParseResult<E>
 where
     E: TryFrom<&'static str, Error = &'static str>,
 {
@@ -40,19 +40,19 @@ where
     }
 }
 
-pub fn command() -> impl Fn(&str) -> Result<(&str, Command), &str> {
+pub fn command() -> impl Fn(&str) -> ParseResult<Command> {
     literal_to_enum(Command::all())
 }
 
-pub fn producer() -> impl Fn(&str) -> Result<(&str, Producer), &str> {
+pub fn producer() -> impl Fn(&str) -> ParseResult<Producer> {
     literal_to_enum(Producer::all())
 }
 
-pub fn adapter() -> impl Fn(&str) -> Result<(&str, Adapter), &str> {
+pub fn adapter() -> impl Fn(&str) -> ParseResult<Adapter> {
     literal_to_enum(Adapter::all())
 }
 
-pub fn consumer() -> impl Fn(&str) -> Result<(&str, Consumer), &str> {
+pub fn consumer() -> impl Fn(&str) -> ParseResult<Consumer> {
     literal_to_enum(Consumer::all())
 }
 
