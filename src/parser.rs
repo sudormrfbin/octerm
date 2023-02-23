@@ -103,7 +103,6 @@ fn producer_expr() -> impl Fn(&str) -> ParseResult<ProducerExpr> {
         and(producer_with_args(), piped_adapters),
         maybe(piped_consumer),
     );
-    let producer_expr = eof(producer_expr);
     map(producer_expr, |((prod_with_args, adap_with_args), cons)| {
         ProducerExpr {
             producer: prod_with_args,
@@ -115,7 +114,7 @@ fn producer_expr() -> impl Fn(&str) -> ParseResult<ProducerExpr> {
 
 pub fn parser() -> impl Fn(&str) -> ParseResult<Parsed> {
     let command = map(eof(command()), Parsed::Command);
-    let prod_expr = map(producer_expr(), Parsed::ProducerExpr);
+    let prod_expr = map(eof(producer_expr()), Parsed::ProducerExpr);
     let cons_with_args = map(eof(consumer_with_args()), Parsed::ConsumerWithArgs);
 
     or(or(command, prod_expr), cons_with_args)
@@ -216,7 +215,7 @@ mod test {
         test("list|done", Producer::List, &[], "|done");
         test("list", Producer::List, &[], "");
         // This is expected when using this parser; we handle this case
-        // in the producer_expr parser.
+        // in the top level parser.
         test("listed", Producer::List, &[], "ed");
         // assert!(parse("listed").is_err());
         // assert!(parse("listed pr").is_err());
@@ -283,9 +282,7 @@ mod test {
             };
         }
 
-        assert!(parse("lister").is_err());
         test!("list", pexpr!(List), "bare producer");
-
         test!(
             "list pr open",
             pexpr!(List ["pr", "open"]),
@@ -336,6 +333,14 @@ mod test {
             pexpr!(List => [Confirm] => [Confirm] => Done),
             "bare producer and bare adapter*s* and bare consumer"
         );
+
+        // Expected because eof is not enforced in the producer_expr parser
+        // but rather in the top level parser.
+        assert_eq!(
+            parse("lister"),
+            Ok(("er", pexpr!(List))),
+            "parses partial input with data remanining in input stream"
+        );
     }
 
     #[test]
@@ -361,5 +366,6 @@ mod test {
                 })
             ))
         );
+        assert!(parse("lister").is_err());
     }
 }
