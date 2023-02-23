@@ -112,12 +112,16 @@ fn producer_expr() -> impl Fn(&str) -> ParseResult<ProducerExpr> {
     })
 }
 
-pub fn parser() -> impl Fn(&str) -> ParseResult<Parsed> {
+fn parser() -> impl Fn(&str) -> ParseResult<Parsed> {
     let command = map(eof(command()), Parsed::Command);
     let prod_expr = map(eof(producer_expr()), Parsed::ProducerExpr);
     let cons_with_args = map(eof(consumer_with_args()), Parsed::ConsumerWithArgs);
 
     or(or(command, prod_expr), cons_with_args)
+}
+
+pub fn parse(input: &str) -> ParseResult<Parsed> {
+    parser()(input)
 }
 
 #[cfg(test)]
