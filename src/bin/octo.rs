@@ -1,6 +1,9 @@
 use octerm::{
     error::Error,
     github::{Notification, NotificationTarget},
+    parser::types::{
+        Command, Consumer, ConsumerWithArgs, Parsed, Producer, ProducerExpr, ProducerWithArgs,
+    },
 };
 use reedline::{DefaultPrompt, DefaultPromptSegment, Reedline, Signal};
 
@@ -27,90 +30,112 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Exiting.");
                 break;
             }
-            Ok(Signal::Success(cmdline)) => {
-                let cmds: Vec<&str> = cmdline.split('|').collect();
-                let cmd_result = match &cmds[..] {
-                    [] => Ok(()),
-                    [producer] if PRODUCERS.contains(producer) => {
-                        handle_producer(&tokenize(producer), &notifications).await
+            Ok(Signal::Success(cmdline)) => match octerm::parser::parse(cmdline.trim()) {
+                Ok((rem_input, parsed)) => {
+                    if rem_input != "" {
+                        print_error(&format!("Invalid expression tail: `{rem_input}`"));
+                        continue;
                     }
-                    [consumer] if CONSUMERS.contains(consumer) => {
-                        handle_consumer(&tokenize(consumer), &mut notifications, None).await
+                    if let Err(err) = run(parsed, &mut notifications).await {
+                        print_error(&err);
                     }
-                    [command] if COMMANDS.contains(command) => {
-                        handle_command(&tokenize(command), &mut notifications).await
-                    }
-                    [invalid] => Err(format!("Invalid command '{invalid}'")),
-                    [producer, _adapters @ .., _consumer] => {
-                        handle_producer(&tokenize(producer), &notifications).await
-                    }
-                };
-
-                if let Err(err) = cmd_result {
-                    print_error(&err);
                 }
-            }
-            Err(err) => eprintln!("Error: {err}"),
+                Err(_) => {
+                    print_error("Invalid expression");
+                    continue;
+                }
+            },
+            Err(err) => print_error(&err.to_string()),
         }
     }
     Ok(())
 }
 
-// TODO: Change to hashmap?
-pub const PRODUCERS: &[&str] = &["list"];
-pub const CONSUMERS: &[&str] = &["open", "done"];
-pub const COMMANDS: &[&str] = &["reload"];
-pub const ADAPTERS: &[&str] = &[];
+type ExecResult = Result<(), String>;
 
-fn tokenize(cmd: &str) -> Vec<&str> {
-    cmd.split_whitespace().collect()
+async fn run(parsed: Parsed, notifications: &mut Vec<Notification>) -> ExecResult {
+    match parsed {
+        Parsed::Command(cmd) => run_command(cmd, notifications).await?,
+        Parsed::ProducerExpr(pexpr) => run_producer_expr(pexpr, notifications).await?,
+        Parsed::ConsumerWithArgs(cons) => run_consumer(cons, notifications).await?,
+    };
+    Ok(())
 }
 
-async fn handle_producer(tokens: &[&str], notifications: &[Notification]) -> Result<(), String> {
-    match tokens {
-        ["list" | "l", args @ ..] => list(notifications, args).await,
-        [] => Ok(()),
-        _ => Err("Invalid command".to_string()),
-    }
+async fn run_command(cmd: Command, notifications: &mut Vec<Notification>) -> ExecResult {
+    match cmd {
+        Command::Reload => reload(notifications).await?,
+    };
+    Ok(())
 }
 
-async fn handle_consumer(
-    tokens: &[&str],
+async fn run_producer_expr(
+    pexpr: ProducerExpr,
     notifications: &mut Vec<Notification>,
-    piped: Option<Vec<usize>>,
-) -> Result<(), String> {
-    match tokens {
-        ["open" | "o", args @ ..] => open(notifications, args, piped).await,
-        ["done" | "d", args @ ..] => {
-            let result = done(notifications, args, piped).await;
-            // Print the list again since done will change the indices
-            let _ = list(notifications, &[]).await;
-            result
+) -> ExecResult {
+    let ProducerExpr {
+        producer:
+            ProducerWithArgs {
+                producer,
+                args: producer_args,
+            },
+        adapters,
+        consumer,
+    } = pexpr;
+
+    let indices = match producer {
+        Producer::List => list(notifications, producer_args).await?,
+    };
+
+    for _adapter in adapters {}
+
+    match consumer {
+        None => print_notifications(notifications, &indices),
+        Some(consumer) => {
+            run_consumer(
+                ConsumerWithArgs {
+                    consumer,
+                    args: indices,
+                },
+                notifications,
+            )
+            .await?
         }
-        _ => Err("Invalid command".to_string()),
-    }
+    };
+
+    Ok(())
 }
 
-async fn handle_command(
-    tokens: &[&str],
-    notifications: &mut Vec<Notification>,
-) -> Result<(), String> {
-    match tokens {
-        ["reload" | "r"] => reload(notifications).await,
-        _ => Err("Invalid command".to_string()),
-    }
+async fn run_consumer(cons: ConsumerWithArgs, notifications: &mut Vec<Notification>) -> ExecResult {
+    let ConsumerWithArgs {
+        consumer: cons,
+        args,
+    } = cons;
+
+    match cons {
+        Consumer::Open => consumers::open(notifications, &args).await?,
+        Consumer::Done => {
+            consumers::done(notifications, &args).await?;
+            // Print the list again since done will change the indices
+            let indices = list(notifications, Vec::new()).await?;
+            print_notifications(notifications, &indices);
+        }
+    };
+
+    Ok(())
 }
 
-pub async fn list(notifications: &[Notification], args: &[&str]) -> Result<(), String> {
+pub async fn list(notifications: &[Notification], args: Vec<String>) -> Result<Vec<usize>, String> {
     // TODO: Robust parsing (invalid tokens, etc)
 
-    let is_pr = args.contains(&"pr");
-    let is_issue = args.contains(&"issue");
-    let is_closed = args.contains(&"closed");
-    let is_open = args.contains(&"open");
-    let is_merged = args.contains(&"merged");
-    let is_release = args.contains(&"release");
-    let is_discussion = args.contains(&"discussion");
+    let has_arg = |arg| args.iter().any(|a| *a == arg);
+    let is_pr = has_arg("pr");
+    let is_issue = has_arg("issue");
+    let is_closed = has_arg("closed");
+    let is_open = has_arg("open");
+    let is_merged = has_arg("merged");
+    let is_release = has_arg("release");
+    let is_discussion = has_arg("discussion");
 
     if true_count(&[is_pr, is_issue, is_release, is_discussion]) > 1 {
         return Err("pr, issue, discussion, release are mutually exclusive".to_string());
@@ -157,17 +182,15 @@ pub async fn list(notifications: &[Notification], args: &[&str]) -> Result<(), S
         }
     };
 
-    let list = notifications
+    let notification_indices = notifications
         .iter()
         .enumerate()
         .filter(|(_, n)| filter_by_type(n))
-        .filter(|(_, n)| filter_by_state(n));
+        .filter(|(_, n)| filter_by_state(n))
+        .map(|(i, _)| i)
+        .collect();
 
-    for (i, notif) in list.rev() {
-        println!("{i:2}. {}", notif.to_colored_string());
-    }
-
-    Ok(())
+    Ok(notification_indices)
 }
 
 pub async fn reload(notifications: &mut Vec<Notification>) -> Result<(), String> {
@@ -177,24 +200,6 @@ pub async fn reload(notifications: &mut Vec<Notification>) -> Result<(), String>
         .map_err(|err| err.to_string())?;
 
     Ok(())
-}
-
-pub async fn open(
-    notifications: &mut Vec<Notification>,
-    args: &[&str],
-    piped: Option<Vec<usize>>,
-) -> Result<(), String> {
-    let indices = arg_or_pipe_indices(args, piped, notifications.len())?;
-    consumers::open(notifications, &indices).await
-}
-
-pub async fn done(
-    notifications: &mut Vec<Notification>,
-    args: &[&str],
-    piped: Option<Vec<usize>>,
-) -> Result<(), String> {
-    let indices = arg_or_pipe_indices(args, piped, notifications.len())?;
-    consumers::done(notifications, &indices).await
 }
 
 pub mod consumers {
@@ -248,43 +253,16 @@ pub mod consumers {
     }
 }
 
-/// For commands that accept both arguments and piped values, return the set
-/// of indices that they should act on. Arguments and piped values are mutually
-/// exclusive.
-fn arg_or_pipe_indices(
-    args: &[&str],
-    piped: Option<Vec<usize>>,
-    list_len: usize,
-) -> Result<Vec<usize>, String> {
-    let indices = match (args, piped) {
-        ([], None) => return Err("No data recieved as arguments or from pipe".to_string()),
-        ([_, ..], Some(_)) => {
-            // Both args and piped values given
-            return Err("Cannot take arguments when used at end of pipe".to_string());
+fn print_notifications(notifications: &[Notification], indices: &[usize]) {
+    for i in indices {
+        match notifications.get(*i) {
+            Some(n) => println!("{i:2}. {}", n.to_colored_string()),
+            None => print_error("Invalid notifications list index"),
         }
-        (args @ [_, ..], None) => validate_indices(args, list_len)?,
-        ([], Some(filter)) => filter,
-    };
-    Ok(indices)
+    }
 }
 
-/// Convert a list of strings to a list of indices, ensuring that each is
-/// a valid index.
-fn validate_indices(args: &[&str], list_len: usize) -> Result<Vec<usize>, String> {
-    args.iter()
-        .map(|idx| {
-            let idx = idx
-                .parse::<usize>()
-                .map_err(|_| format!("{idx} is not a valid index"))?;
-            match idx < list_len {
-                true => Ok(idx),
-                false => Err(format!("{idx} is out of bounds in list")),
-            }
-        })
-        .collect()
-}
-
-pub fn print_error(msg: &str) {
+fn print_error(msg: &str) {
     println!("{}: {msg}", "Error".red())
 }
 
