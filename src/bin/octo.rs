@@ -125,8 +125,8 @@ async fn run_consumer(cons: ConsumerWithArgs, notifications: &mut Vec<Notificati
         Consumer::Done => {
             consumers::done(notifications, &args).await?;
             // Print the list again since done will change the indices
-            let indices = list(notifications, Vec::new()).await?;
-            print_notifications(notifications, &indices);
+            // let indices = list(notifications, Vec::new()).await?;
+            // print_notifications(notifications, &indices);
         }
     };
 
