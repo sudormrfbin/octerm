@@ -112,7 +112,9 @@ async fn run_consumer(cons: ConsumerWithArgs, notifications: &mut Vec<Notificati
         args,
     } = cons;
 
+    // TODO: Decide behaviour on empty args
     match cons {
+        Consumer::Count => consumers::count(notifications, &args).await?,
         Consumer::Open => consumers::open(notifications, &args).await?,
         Consumer::Done => {
             consumers::done(notifications, &args).await?;
@@ -209,6 +211,12 @@ pub mod consumers {
         github::Notification,
         network::methods::{mark_notification_as_read, open_notification_in_browser},
     };
+
+    pub async fn count(notifications: &mut [Notification], filter: &[usize]) -> Result<(), String> {
+        let count = filter.iter().map(|i| &notifications[*i]).count();
+        println!("{count}");
+        Ok(())
+    }
 
     pub async fn open(notifications: &mut [Notification], filter: &[usize]) -> Result<(), String> {
         let futs = filter

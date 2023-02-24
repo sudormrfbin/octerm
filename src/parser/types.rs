@@ -76,11 +76,12 @@ impl TryFrom<&str> for Adapter {
 pub enum Consumer {
     Open,
     Done,
+    Count,
 }
 
 impl Consumer {
-    pub const fn all() -> [&'static str; 2] {
-        ["open", "done"]
+    pub const fn all() -> [&'static str; 3] {
+        ["open", "done", "count"]
     }
 }
 
@@ -91,6 +92,7 @@ impl TryFrom<&str> for Consumer {
         match value {
             "open" => Ok(Self::Open),
             "done" => Ok(Self::Done),
+            "count" => Ok(Self::Count),
             _ => Err("not a consumer"),
         }
     }
