@@ -215,52 +215,73 @@ pub mod adapters {
 
     use octerm::github::Notification;
 
-    use crate::{format_colored_notification, print_error};
+    use crate::{format_colored_notification, read_char};
 
     pub async fn confirm(
         notifications: &[Notification],
         filter: &[usize],
     ) -> Result<Vec<usize>, String> {
-        // crossterm::terminal::enable_raw_mode()
-        //     .map_err(|_| "Could not enable terminal raw mode".to_string())?;
+        crossterm::terminal::enable_raw_mode().map_err(|_| "Could not enable terminal raw mode")?;
+
+        let result = confirm_helper(notifications, filter);
+
+        // TODO: Register panic handler to always disable raw mode
+        crossterm::terminal::disable_raw_mode()
+            .map_err(|_| "Could not disable terminal raw mode")?;
+
+        if result.is_err() {
+            // Reset cursor to beginning of line
+            println!("\r");
+        }
+
+        result
+    }
+
+    fn confirm_helper(
+        notifications: &[Notification],
+        filter: &[usize],
+    ) -> Result<Vec<usize>, String> {
+        let flush = || {
+            std::io::stdout()
+                .flush()
+                .map_err(|_| "Could not flush output")
+        };
 
         let mut indices = Vec::new();
 
         let mut it = filter.iter().map(|i| (*i, &notifications[*i]));
         let mut next_notification = it.next();
-        let mut input = String::with_capacity(3);
 
         while let Some((i, notification)) = next_notification {
             print!("{}: [y/n] ", format_colored_notification(i, notification));
-            let _ = std::io::stdout().flush();
-            std::io::stdin()
-                .read_line(&mut input)
-                .map_err(|_| "could not read input".to_string())?;
-
+            flush()?;
             let mut is_valid_input = true;
 
             // TODO: Add undo
-            // TODO: Add abort
             // TODO: Add skip rest
             // TODO: Add show rest
-            match input.trim() /* remove newline */ {
-                "y" | "yes" => indices.push(i),
-                "n" | "no" => {}
-                invalid_input => {
-                    print_error(&format!("Unknown option `{invalid_input}`"));
+            // TODO: Show character read on screen
+            let input = read_char().map_err(|_| "Couldn't read input")?;
+            print!("{}", input);
+            flush()?;
+
+            match input {
+                'y' => indices.push(i),
+                'n' => {}
+                'q' => return Err("Aborted confirm queue".to_string()),
+                _invalid_input => {
+                    print!(" (invalid option)");
                     is_valid_input = false;
                 }
             }
 
+            // Reset cursor to beginning of line
+            println!("\r");
+
             if is_valid_input {
                 next_notification = it.next();
             }
-
-            input.clear();
         }
-
-        // crossterm::terminal::disable_raw_mode()
-        // .map_err(|_| "Could not disable terminal raw mode".to_string())?;
 
         Ok(indices)
     }
@@ -320,6 +341,21 @@ pub mod consumers {
         }
 
         Ok(())
+    }
+}
+
+fn read_char() -> crossterm::Result<char> {
+    use crossterm::event::{Event, KeyCode, KeyEvent /*, KeyModifiers */};
+
+    loop {
+        if let Event::Key(event) = crossterm::event::read()? {
+            let KeyEvent { code, modifiers } = event;
+            if modifiers.is_empty() {
+                if let KeyCode::Char(ch) = code {
+                    return Ok(ch);
+                }
+            }
+        }
     }
 }
 
