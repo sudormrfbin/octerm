@@ -1,12 +1,13 @@
 use octerm::{
     error::Error,
     github::{Notification, NotificationTarget},
+    line_editor,
     parser::types::{
         Adapter, Command, Consumer, ConsumerWithArgs, Parsed, Producer, ProducerExpr,
         ProducerWithArgs,
     },
 };
-use reedline::{DefaultPrompt, DefaultPromptSegment, Reedline, Signal};
+use reedline::Signal;
 
 use crossterm::style::Stylize;
 
@@ -21,12 +22,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Syncing notifications");
     // TODO: Retry in case of bad connection, better error handling, etc.
     let mut notifications = octerm::network::methods::notifications(octocrab::instance()).await?;
-    let mut line_editor = Reedline::create();
-    let mut prompt = DefaultPrompt::new(DefaultPromptSegment::Empty, DefaultPromptSegment::Empty);
+    let mut line_editor = line_editor::line_editor();
 
     loop {
-        prompt.left_prompt = DefaultPromptSegment::Basic(format!("{} ", notifications.len()));
-        let sig = line_editor.read_line(&prompt);
+        let sig = line_editor.read_line(&line_editor::prompt(notifications.len()));
         match sig {
             Ok(Signal::CtrlD) | Ok(Signal::CtrlC) => {
                 println!("Exiting.");
