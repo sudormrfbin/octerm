@@ -1,9 +1,6 @@
 pub mod graphql;
 pub mod methods;
 
-#[cfg(feature = "tui")]
-pub mod server;
-
 /// Helper struct used to send the parameters for a issues timeline api call.
 #[derive(serde::Serialize)]
 struct TimelineParams {
