@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Ok(Signal::Success(cmdline)) => match octerm::parser::parse(cmdline.trim()) {
                 Ok((rem_input, parsed)) => {
-                    if rem_input != "" {
+                    if !rem_input.is_empty() {
                         print_error(&format!("Invalid expression tail: `{rem_input}`"));
                         continue;
                     }
@@ -260,7 +260,6 @@ pub mod adapters {
             // TODO: Add undo
             // TODO: Add skip rest
             // TODO: Add show rest
-            // TODO: Show character read on screen
             let input = read_char().map_err(|_| "Couldn't read input")?;
             print!("{}", input);
             flush()?;
@@ -295,9 +294,11 @@ pub mod consumers {
         network::methods::{mark_notification_as_read, open_notification_in_browser},
     };
 
-    pub async fn count(notifications: &mut [Notification], filter: &[usize]) -> Result<(), String> {
-        let count = filter.iter().map(|i| &notifications[*i]).count();
-        println!("{count}");
+    pub async fn count(
+        _notifications: &mut [Notification],
+        filter: &[usize],
+    ) -> Result<(), String> {
+        println!("{}", filter.len());
         Ok(())
     }
 
@@ -362,7 +363,7 @@ fn read_char() -> crossterm::Result<char> {
 fn print_notifications(notifications: &[Notification], indices: &[usize]) {
     for i in indices {
         match notifications.get(*i) {
-            Some(n) => println!("{}", format_colored_notification(*i, &n)),
+            Some(n) => println!("{}", format_colored_notification(*i, n)),
             None => print_error("Invalid notifications list index"),
         }
     }
