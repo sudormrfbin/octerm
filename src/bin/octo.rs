@@ -2,7 +2,8 @@ use octerm::{
     error::Error,
     github::{Notification, NotificationTarget},
     parser::types::{
-        Command, Consumer, ConsumerWithArgs, Parsed, Producer, ProducerExpr, ProducerWithArgs,
+        Adapter, Command, Consumer, ConsumerWithArgs, Parsed, Producer, ProducerExpr,
+        ProducerWithArgs,
     },
 };
 use reedline::{DefaultPrompt, DefaultPromptSegment, Reedline, Signal};
@@ -18,6 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     octocrab::initialise(builder)?;
 
     println!("Syncing notifications");
+    // TODO: Retry in case of bad connection, better error handling, etc.
     let mut notifications = octerm::network::methods::notifications(octocrab::instance()).await?;
     let mut line_editor = Reedline::create();
     let mut prompt = DefaultPrompt::new(DefaultPromptSegment::Empty, DefaultPromptSegment::Empty);
@@ -83,11 +85,15 @@ async fn run_producer_expr(
         consumer,
     } = pexpr;
 
-    let indices = match producer {
+    let mut indices = match producer {
         Producer::List => list(notifications, producer_args).await?,
     };
 
-    for _adapter in adapters {}
+    for adapter in adapters {
+        indices = match adapter.adapter {
+            Adapter::Confirm => adapters::confirm(notifications, &indices).await?,
+        }
+    }
 
     match consumer {
         None => print_notifications(notifications, &indices),
@@ -204,6 +210,62 @@ pub async fn reload(notifications: &mut Vec<Notification>) -> Result<(), String>
     Ok(())
 }
 
+pub mod adapters {
+    use std::io::Write;
+
+    use octerm::github::Notification;
+
+    use crate::{format_colored_notification, print_error};
+
+    pub async fn confirm(
+        notifications: &[Notification],
+        filter: &[usize],
+    ) -> Result<Vec<usize>, String> {
+        // crossterm::terminal::enable_raw_mode()
+        //     .map_err(|_| "Could not enable terminal raw mode".to_string())?;
+
+        let mut indices = Vec::new();
+
+        let mut it = filter.iter().map(|i| (*i, &notifications[*i]));
+        let mut next_notification = it.next();
+        let mut input = String::with_capacity(3);
+
+        while let Some((i, notification)) = next_notification {
+            print!("{}: [y/n] ", format_colored_notification(i, notification));
+            let _ = std::io::stdout().flush();
+            std::io::stdin()
+                .read_line(&mut input)
+                .map_err(|_| "could not read input".to_string())?;
+
+            let mut is_valid_input = true;
+
+            // TODO: Add undo
+            // TODO: Add abort
+            // TODO: Add skip rest
+            // TODO: Add show rest
+            match input.trim() /* remove newline */ {
+                "y" | "yes" => indices.push(i),
+                "n" | "no" => {}
+                invalid_input => {
+                    print_error(&format!("Unknown option `{invalid_input}`"));
+                    is_valid_input = false;
+                }
+            }
+
+            if is_valid_input {
+                next_notification = it.next();
+            }
+
+            input.clear();
+        }
+
+        // crossterm::terminal::disable_raw_mode()
+        // .map_err(|_| "Could not disable terminal raw mode".to_string())?;
+
+        Ok(indices)
+    }
+}
+
 pub mod consumers {
     use futures::TryFutureExt;
     use octerm::{
@@ -264,10 +326,14 @@ pub mod consumers {
 fn print_notifications(notifications: &[Notification], indices: &[usize]) {
     for i in indices {
         match notifications.get(*i) {
-            Some(n) => println!("{i:2}. {}", n.to_colored_string()),
+            Some(n) => println!("{}", format_colored_notification(*i, &n)),
             None => print_error("Invalid notifications list index"),
         }
     }
+}
+
+fn format_colored_notification(index: usize, notification: &Notification) -> String {
+    format!("{index:2}. {}", notification.to_colored_string())
 }
 
 fn print_error(msg: &str) {
