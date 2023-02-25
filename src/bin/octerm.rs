@@ -244,7 +244,7 @@ pub mod adapters {
         let mut next_notification = it.next();
 
         if next_notification.is_some() {
-            println!("[y]es, [n]o, [a]ll, [d]one, [Q]uit/abort");
+            println!("[y]es, [n]o, [a]ll, [d]one, [Q]uit/abort\r");
         } else {
             return Ok(Vec::new());
         }
@@ -356,13 +356,20 @@ pub mod consumers {
 }
 
 fn read_char() -> crossterm::Result<char> {
-    use crossterm::event::{Event, KeyCode, KeyEvent /*, KeyModifiers */};
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
     loop {
         if let Event::Key(event) = crossterm::event::read()? {
-            let KeyEvent { code, modifiers } = event;
-            if modifiers.is_empty() {
-                if let KeyCode::Char(ch) = code {
+            let KeyEvent {
+                code,
+                mut modifiers,
+            } = event;
+            if let KeyCode::Char(mut ch) = code {
+                if modifiers.contains(KeyModifiers::SHIFT) {
+                    modifiers.remove(KeyModifiers::SHIFT);
+                    ch.make_ascii_uppercase();
+                }
+                if modifiers.is_empty() {
                     return Ok(ch);
                 }
             }
