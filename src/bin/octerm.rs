@@ -240,13 +240,18 @@ pub mod adapters {
         notifications: &[Notification],
         filter: &[usize],
     ) -> Result<Vec<usize>, String> {
-        let mut indices = Vec::new();
-
         let mut it = filter.iter().map(|i| (*i, &notifications[*i]));
         let mut next_notification = it.next();
 
+        if next_notification.is_some() {
+            println!("[y]es, [n]o, [a]ll, [d]one, [Q]uit/abort");
+        } else {
+            return Ok(Vec::new());
+        }
+
+        let mut indices = Vec::new();
         while let Some((i, notification)) = next_notification {
-            print!("{}: [y/n] ", format_colored_notification(i, notification));
+            print!("{}: ", format_colored_notification(i, notification));
             flush_stdout()?;
             let mut is_valid_input = true;
 
