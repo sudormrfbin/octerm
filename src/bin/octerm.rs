@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use octerm::{
     error::Error,
     github::{Notification, NotificationTarget},
@@ -210,11 +212,9 @@ pub async fn reload(notifications: &mut Vec<Notification>) -> Result<(), String>
 }
 
 pub mod adapters {
-    use std::io::Write;
-
     use octerm::github::Notification;
 
-    use crate::{format_colored_notification, read_char};
+    use crate::{flush_stdout, format_colored_notification, read_char};
 
     pub async fn confirm(
         notifications: &[Notification],
@@ -240,12 +240,6 @@ pub mod adapters {
         notifications: &[Notification],
         filter: &[usize],
     ) -> Result<Vec<usize>, String> {
-        let flush = || {
-            std::io::stdout()
-                .flush()
-                .map_err(|_| "Could not flush output")
-        };
-
         let mut indices = Vec::new();
 
         let mut it = filter.iter().map(|i| (*i, &notifications[*i]));
@@ -253,14 +247,14 @@ pub mod adapters {
 
         while let Some((i, notification)) = next_notification {
             print!("{}: [y/n] ", format_colored_notification(i, notification));
-            flush()?;
+            flush_stdout()?;
             let mut is_valid_input = true;
 
             // TODO: Add undo
             // TODO: Add show rest
             let input = read_char().map_err(|_| "Couldn't read input")?;
             print!("{}", input);
-            flush()?;
+            flush_stdout()?;
 
             // Keybindings have been modeled after git add -p
             // TODO: Add additional confirmation keybind for d and a
@@ -390,4 +384,10 @@ fn print_error(msg: &str) {
 
 fn true_count(bools: &[bool]) -> usize {
     bools.iter().map(|b| *b as usize).sum()
+}
+
+fn flush_stdout() -> Result<(), String> {
+    std::io::stdout()
+        .flush()
+        .map_err(|_| "Could not flush stdout".to_string())
 }
