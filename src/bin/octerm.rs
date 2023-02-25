@@ -257,16 +257,28 @@ pub mod adapters {
             let mut is_valid_input = true;
 
             // TODO: Add undo
-            // TODO: Add skip rest
             // TODO: Add show rest
             let input = read_char().map_err(|_| "Couldn't read input")?;
             print!("{}", input);
             flush()?;
 
+            // Keybindings have been modeled after git add -p
+            // TODO: Add additional confirmation keybind for d and a
+            // (cannot undo if pressed by accident)?
             match input {
                 'y' => indices.push(i),
                 'n' => {}
-                'q' => return Err("Aborted confirm queue".to_string()),
+                // Skip this notification and all the remaining ones
+                'd' => break,
+                // Confirm current notification and all the remaining ones
+                'a' => {
+                    indices.push(i);
+                    while let Some((i, _)) = it.next() {
+                        indices.push(i);
+                    }
+                    break;
+                }
+                'Q' => return Err("Aborted confirm queue".to_string()),
                 _invalid_input => {
                     print!(" (invalid option)");
                     is_valid_input = false;
