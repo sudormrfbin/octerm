@@ -22,8 +22,13 @@ impl PartialEq for Notification {
 impl Notification {
     pub fn to_colored_string(&self) -> String {
         let color = crate::util::notif_target_color(&self.target).into();
+        let number = self
+            .target
+            .number()
+            .map(|n| format!("{}{}", "#".dark_grey(), n.to_string().dark_grey()))
+            .unwrap_or_default();
         format!(
-            "{repo}: {icon} {title}",
+            "{repo}{number}: {icon} {title}",
             repo = self.inner.repository.name,
             icon = self.target.icon().with(color),
             title = self.inner.subject.title.as_str().with(color),
@@ -97,6 +102,17 @@ impl NotificationTarget {
             NotificationTarget::Discussion(ref d) => d.icon(),
             NotificationTarget::CiBuild => "",
             NotificationTarget::Unknown => "",
+        }
+    }
+
+    pub fn number(&self) -> Option<usize> {
+        match self {
+            NotificationTarget::Issue(i) => Some(i.number),
+            NotificationTarget::PullRequest(p) => Some(p.number),
+            NotificationTarget::Release(_) => None,
+            NotificationTarget::Discussion(d) => Some(d.number),
+            NotificationTarget::CiBuild => None,
+            NotificationTarget::Unknown => None,
         }
     }
 }
